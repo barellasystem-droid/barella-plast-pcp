@@ -1,4 +1,4 @@
-const ROLES = ['admin', 'pcp', 'operador', 'almoxarifado', 'qualidade', 'gerencia'];
+const ROLES = ['admin', 'pcp', 'operador', 'almoxarifado', 'qualidade', 'gerencia', 'pendente'];
 
 const ROLE_LABELS = {
   admin: 'Administrador',
@@ -7,6 +7,7 @@ const ROLE_LABELS = {
   almoxarifado: 'Almoxarifado',
   qualidade: 'Qualidade',
   gerencia: 'Gerência',
+  pendente: 'Pendente de Aprovação',
 };
 
 const TABS = [

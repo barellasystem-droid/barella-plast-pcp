@@ -28,11 +28,13 @@ async function request(method, path, body) {
 
 export const api = {
   login: (username, password) => request('POST', '/auth/login', { username, password }),
+  register: (data) => request('POST', '/auth/register', data),
   me: () => request('GET', '/auth/me'),
 
   users: {
     list: () => request('GET', '/users'),
     create: (u) => request('POST', '/users', u),
+    setRole: (id, role) => request('PATCH', `/users/${id}/role`, { role }),
     remove: (id) => request('DELETE', `/users/${id}`),
   },
   permissions: {

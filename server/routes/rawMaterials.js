@@ -1,14 +1,14 @@
 const express = require('express');
 const db = require('../db');
-const { requireAuth, requireView, requireEdit } = require('../auth');
+const { requireAuth, requireView, requireEdit, blockPending } = require('../auth');
 
 const router = express.Router();
 const TAB = 'materiasPrimas';
 
-// Any authenticated user can read this list: other tabs (Apontamento, Dashboard,
-// Consolidado MP, Comparativos) need to join against it even if their profile
-// can't see/edit this tab directly. Edit/delete below stays gated by requireEdit(TAB).
-router.get('/', requireAuth, async (req, res) => {
+// Any authenticated (and approved) user can read this list: other tabs (Apontamento,
+// Dashboard, Consolidado MP, Comparativos) need to join against it even if their
+// profile can't see/edit this tab directly. Edit/delete below stays gated by requireEdit(TAB).
+router.get('/', requireAuth, blockPending, async (req, res) => {
   const { rows } = await db.query('SELECT * FROM raw_materials ORDER BY code');
   res.json(rows);
 });

@@ -5,6 +5,9 @@ export const styles = {
   sidebar: { background: '#15181B', color: '#E7E7E5', display: 'flex', flexDirection: 'column', padding: '16px 12px' },
   brand: { display: 'flex', alignItems: 'center', gap: 10, padding: '4px 8px 16px' },
   brandTitle: { fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15, letterSpacing: 0.5, color: '#F3F1EC' },
+  // Mesmo estilo do brandTitle, mas para o card de login (fundo branco) —
+  // o brandTitle original é quase branco, pensado pra barra lateral escura.
+  loginBrandTitle: { fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15, letterSpacing: 0.5, color: '#1B1D1F' },
   brandSub: { fontSize: 11, color: '#9A9FA4' },
   groupLabel: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, color: '#6B7075', padding: '6px 10px 4px' },
   navItem: { display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 10px', background: 'transparent', border: 'none', color: '#C7CACD', borderRadius: 6, cursor: 'pointer', fontSize: 13, marginBottom: 2 },

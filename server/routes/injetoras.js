@@ -1,14 +1,14 @@
 const express = require('express');
 const crypto = require('crypto');
 const db = require('../db');
-const { requireAuth, requireEdit } = require('../auth');
+const { requireAuth, requireEdit, blockPending } = require('../auth');
 
 const router = express.Router();
 const TAB = 'injetoras';
 
-// Any authenticated user can read this list: Cadastros (máquina padrão) e
-// Distribuição Injetoras precisam dela para os combos mesmo sem poder editar esta aba.
-router.get('/', requireAuth, async (req, res) => {
+// Any authenticated (and approved) user can read this list: Cadastros (máquina padrão)
+// e Distribuição Injetoras precisam dela para os combos mesmo sem poder editar esta aba.
+router.get('/', requireAuth, blockPending, async (req, res) => {
   const { rows } = await db.query('SELECT * FROM injetoras ORDER BY nome');
   res.json(rows);
 });

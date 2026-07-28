@@ -6,18 +6,9 @@ import {
 import { styles } from './styles.js';
 import { api, getToken, setToken } from './api.js';
 import {
-  ROLES, ROLE_LABELS, ROLE_STRIPE, TABS, TURNOS, STATUS_OP,
+  ROLES, ASSIGNABLE_ROLES, ROLE_LABELS, ROLE_STRIPE, TABS, TURNOS, STATUS_OP,
   PRIORIDADES, MESES, STATUS_COLOR, fmt,
 } from './constants.js';
-
-const DEMO_USERS = [
-  { username: 'admin', password: 'admin123', role: 'admin' },
-  { username: 'ana.pcp', password: 'pcp123', role: 'pcp' },
-  { username: 'carlos.op', password: 'op123', role: 'operador' },
-  { username: 'marcos.almox', password: 'almox123', role: 'almoxarifado' },
-  { username: 'beatriz.qa', password: 'qual123', role: 'qualidade' },
-  { username: 'roberto.ger', password: 'ger123', role: 'gerencia' },
-];
 
 /* ============================== ROOT APP ============================== */
 
@@ -105,6 +96,13 @@ export default function App() {
     }
   }
 
+  async function handleRegister(data) {
+    const { token, user } = await api.register(data); // deixa o erro propagar pro LoginScreen mostrar
+    setToken(token);
+    setCurrentUser(user);
+    setMyPermissions({});
+  }
+
   function handleLogout() {
     setToken(null);
     setCurrentUser(null);
@@ -145,7 +143,9 @@ export default function App() {
     );
   }
 
-  if (!currentUser) return <LoginScreen onLogin={handleLogin} error={loginErr} />;
+  if (!currentUser) return <LoginScreen onLogin={handleLogin} onRegister={handleRegister} error={loginErr} />;
+
+  if (currentUser.role === 'pendente') return <PendingApprovalScreen user={currentUser} onLogout={handleLogout} />;
 
   const visibleTabs = TABS.filter(t => myPermissions[t.id]?.view);
   const grouped = visibleTabs.reduce((acc, t) => { (acc[t.group] = acc[t.group] || []).push(t); return acc; }, {});
@@ -238,18 +238,35 @@ export default function App() {
 
 /* ============================== LOGIN ============================== */
 
-function LoginScreen({ onLogin, error }) {
+function LoginScreen({ onLogin, onRegister, error }) {
+  const [mode, setMode] = useState('login'); // 'login' | 'register'
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
-  const [showDemo, setShowDemo] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  const [regForm, setRegForm] = useState({ name: '', username: '', password: '', phone: '', cpf: '', cep: '', rua: '', numero: '', bairro: '' });
+  const [regErr, setRegErr] = useState('');
+  const [regBusy, setRegBusy] = useState(false);
 
   async function submit(e) {
     e.preventDefault();
     setBusy(true);
     await onLogin(username, password);
     setBusy(false);
+  }
+
+  function setReg(field) {
+    return (e) => setRegForm(f => ({ ...f, [field]: e.target.value }));
+  }
+
+  async function submitRegister(e) {
+    e.preventDefault();
+    setRegErr('');
+    setRegBusy(true);
+    try { await onRegister(regForm); }
+    catch (err) { setRegErr(err.message || 'Não foi possível concluir o cadastro.'); }
+    setRegBusy(false);
   }
 
   return (
@@ -259,44 +276,95 @@ function LoginScreen({ onLogin, error }) {
         <div style={styles.loginHeader}>
           <Factory size={26} color="#E8A324" />
           <div>
-            <div style={styles.brandTitle}>BARELLA PLAST</div>
+            <div style={styles.loginBrandTitle}>BARELLA PLAST</div>
             <div style={styles.brandSub}>Painel de Produção — PCP</div>
           </div>
         </div>
 
-        <form onSubmit={submit}>
-          <label style={styles.label}>Usuário</label>
-          <input style={styles.input} value={username} onChange={e => setUsername(e.target.value)} placeholder="seu.usuario" autoFocus />
+        {mode === 'login' ? (
+          <>
+            <form onSubmit={submit}>
+              <label style={styles.label}>Usuário</label>
+              <input style={styles.input} value={username} onChange={e => setUsername(e.target.value)} placeholder="seu.usuario" autoFocus />
 
-          <label style={styles.label}>Senha</label>
-          <div style={{ position: 'relative' }}>
-            <input style={styles.input} type={showPw ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" />
-            <button type="button" onClick={() => setShowPw(s => !s)} style={styles.eyeBtn}>{showPw ? <EyeOff size={16} /> : <Eye size={16} />}</button>
-          </div>
-
-          {error && <div style={styles.errBox}><AlertTriangle size={14} /> {error}</div>}
-
-          <button type="submit" style={styles.loginBtn} disabled={busy}>{busy ? 'Entrando…' : 'Entrar'}</button>
-        </form>
-
-        <button style={styles.demoToggle} onClick={() => setShowDemo(s => !s)}>
-          <KeyRound size={13} /> {showDemo ? 'Ocultar' : 'Ver'} usuários de demonstração
-        </button>
-        {showDemo && (
-          <div style={styles.demoBox}>
-            {DEMO_USERS.map(u => (
-              <div key={u.username} style={styles.demoRow}>
-                <span style={{ ...styles.demoDot, background: ROLE_STRIPE[u.role] }} />
-                <span style={{ fontFamily: 'var(--font-mono)' }}>{u.username}</span>
-                <span style={{ opacity: 0.5 }}>/</span>
-                <span style={{ fontFamily: 'var(--font-mono)' }}>{u.password}</span>
-                <span style={{ marginLeft: 8, opacity: 0.6, fontSize: 11, flex: 1 }}>{ROLE_LABELS[u.role]}</span>
-                <button type="button" style={styles.quickLoginBtn} onClick={() => { setUsername(u.username); setPassword(u.password); onLogin(u.username, u.password); }}>Entrar</button>
+              <label style={styles.label}>Senha</label>
+              <div style={{ position: 'relative' }}>
+                <input style={styles.input} type={showPw ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" />
+                <button type="button" onClick={() => setShowPw(s => !s)} style={styles.eyeBtn}>{showPw ? <EyeOff size={16} /> : <Eye size={16} />}</button>
               </div>
-            ))}
-            <div style={{ ...styles.caption, marginTop: 8 }}>Essas contas só existem depois de rodar <code>npm run seed</code> no servidor. Troque as senhas em produção.</div>
-          </div>
+
+              {error && <div style={styles.errBox}><AlertTriangle size={14} /> {error}</div>}
+
+              <button type="submit" style={styles.loginBtn} disabled={busy}>{busy ? 'Entrando…' : 'Entrar'}</button>
+            </form>
+
+            <button type="button" style={styles.demoToggle} onClick={() => setMode('register')}>
+              <KeyRound size={13} /> Não tem conta? Cadastre-se
+            </button>
+          </>
+        ) : (
+          <>
+            <form onSubmit={submitRegister}>
+              <label style={styles.label}>Nome completo</label>
+              <input style={styles.input} value={regForm.name} onChange={setReg('name')} autoFocus />
+
+              <label style={styles.label}>Usuário (login)</label>
+              <input style={styles.input} value={regForm.username} onChange={setReg('username')} />
+
+              <label style={styles.label}>Senha</label>
+              <input style={styles.input} type="password" value={regForm.password} onChange={setReg('password')} placeholder="mínimo 8 caracteres" />
+
+              <label style={styles.label}>Telefone</label>
+              <input style={styles.input} value={regForm.phone} onChange={setReg('phone')} placeholder="(00) 00000-0000" />
+
+              <label style={styles.label}>CPF</label>
+              <input style={styles.input} value={regForm.cpf} onChange={setReg('cpf')} placeholder="000.000.000-00" />
+
+              <label style={styles.label}>CEP</label>
+              <input style={styles.input} value={regForm.cep} onChange={setReg('cep')} placeholder="00000-000" />
+
+              <label style={styles.label}>Rua</label>
+              <input style={styles.input} value={regForm.rua} onChange={setReg('rua')} />
+
+              <label style={styles.label}>Número</label>
+              <input style={styles.input} value={regForm.numero} onChange={setReg('numero')} />
+
+              <label style={styles.label}>Bairro</label>
+              <input style={styles.input} value={regForm.bairro} onChange={setReg('bairro')} />
+
+              {regErr && <div style={styles.errBox}><AlertTriangle size={14} /> {regErr}</div>}
+
+              <button type="submit" style={styles.loginBtn} disabled={regBusy}>{regBusy ? 'Cadastrando…' : 'Cadastrar'}</button>
+            </form>
+
+            <button type="button" style={styles.demoToggle} onClick={() => setMode('login')}>
+              <KeyRound size={13} /> Já tem conta? Entrar
+            </button>
+          </>
         )}
+      </div>
+    </div>
+  );
+}
+
+function PendingApprovalScreen({ user, onLogout }) {
+  return (
+    <div style={styles.loginWrap}>
+      <GlobalStyle />
+      <div className="bp-login-card" style={styles.loginCard}>
+        <div style={styles.loginHeader}>
+          <Factory size={26} color="#E8A324" />
+          <div>
+            <div style={styles.loginBrandTitle}>BARELLA PLAST</div>
+            <div style={styles.brandSub}>Painel de Produção — PCP</div>
+          </div>
+        </div>
+        <div style={{ fontWeight: 600, marginBottom: 6 }}>Olá, {user.name}!</div>
+        <div style={{ color: '#6B7075', fontSize: 13.5, lineHeight: 1.5 }}>
+          Seu cadastro foi recebido e está aguardando a liberação de um Administrador.
+          Assim que sua função for definida em Usuários, você poderá acessar o sistema normalmente.
+        </div>
+        <button type="button" style={{ ...styles.secondaryBtn, width: '100%', justifyContent: 'center', marginTop: 18 }} onClick={onLogout}>Sair</button>
       </div>
     </div>
   );
@@ -1441,6 +1509,9 @@ function UsuariosTab({ users, reloadUsers, canEdit, currentUser, onError }) {
     if (id === currentUser.id) return;
     try { await api.users.remove(id); await reloadUsers(); } catch (e) { onError(e.message); }
   }
+  async function setRole(id, role) {
+    try { await api.users.setRole(id, role); await reloadUsers(); } catch (e) { onError(e.message); }
+  }
 
   return (
     <div>
@@ -1451,7 +1522,7 @@ function UsuariosTab({ users, reloadUsers, canEdit, currentUser, onError }) {
             <Field label="Nome completo" wide><input style={styles.input} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></Field>
             <Field label="Usuário (login)"><input style={styles.input} value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} /></Field>
             <Field label="Senha"><input style={styles.input} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} /></Field>
-            <Field label="Perfil / hierarquia"><select style={styles.input} value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>{ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}</select></Field>
+            <Field label="Perfil / hierarquia"><select style={styles.input} value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>{ASSIGNABLE_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}</select></Field>
             <div style={{ display: 'flex', alignItems: 'flex-end' }}><button type="submit" style={styles.primaryBtn}><Plus size={14} /> Criar usuário</button></div>
           </form>
         </div>
@@ -1464,7 +1535,16 @@ function UsuariosTab({ users, reloadUsers, canEdit, currentUser, onError }) {
             rows={users.map(u => [
               u.name, <span style={styles.mono}>{u.username}</span>,
               <span style={{ ...styles.badge, background: ROLE_STRIPE[u.role] + '22', color: ROLE_STRIPE[u.role] }}>{ROLE_LABELS[u.role]}</span>,
-              canEdit ? (u.id === currentUser.id ? <span style={styles.caption}>(você)</span> : <button style={styles.iconBtnDanger} onClick={() => remove(u.id)}><Trash2 size={13} /></button>) : null,
+              canEdit ? (
+                u.id === currentUser.id ? <span style={styles.caption}>(você)</span> : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <select style={{ ...styles.input, width: 'auto', padding: '4px 6px', fontSize: 12 }} value={u.role} onChange={e => setRole(u.id, e.target.value)}>
+                      {ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+                    </select>
+                    <button style={styles.iconBtnDanger} onClick={() => remove(u.id)}><Trash2 size={13} /></button>
+                  </div>
+                )
+              ) : null,
             ].filter(v => v !== null))}
           />
         )}
@@ -1506,14 +1586,14 @@ function PermissoesTab({ permissionsMatrix, reloadPermissions, canEdit, onError 
             <thead>
               <tr>
                 <th style={styles.th}>Aba</th>
-                {ROLES.map(r => <th key={r} style={{ ...styles.th, textAlign: 'center' }}><div style={{ ...styles.roleStripeSmall, background: ROLE_STRIPE[r] }} />{ROLE_LABELS[r]}</th>)}
+                {ASSIGNABLE_ROLES.map(r => <th key={r} style={{ ...styles.th, textAlign: 'center' }}><div style={{ ...styles.roleStripeSmall, background: ROLE_STRIPE[r] }} />{ROLE_LABELS[r]}</th>)}
               </tr>
             </thead>
             <tbody>
               {TABS.map(t => (
                 <tr key={t.id}>
                   <td style={styles.td}>{t.label}</td>
-                  {ROLES.map(r => (
+                  {ASSIGNABLE_ROLES.map(r => (
                     <td key={r} style={{ ...styles.td, textAlign: 'center' }}>
                       <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
                         <label style={styles.permLabel} title="Ver"><input type="checkbox" disabled={!canEdit} checked={permissionsMatrix[t.id].view.includes(r)} onChange={() => toggle(t.id, 'view', r)} /><Eye size={12} /></label>

@@ -1,14 +1,14 @@
 const express = require('express');
 const crypto = require('crypto');
 const db = require('../db');
-const { requireAuth, requireEdit } = require('../auth');
+const { requireAuth, requireEdit, blockPending } = require('../auth');
 
 const router = express.Router();
 const TAB = 'operadores';
 
-// Any authenticated user can read this list: Distribuição Injetoras needs the
-// active operators for its dropdowns even if their profile can't edit this aba.
-router.get('/', requireAuth, async (req, res) => {
+// Any authenticated (and approved) user can read this list: Distribuição Injetoras
+// needs the active operators for its dropdowns even if their profile can't edit this aba.
+router.get('/', requireAuth, blockPending, async (req, res) => {
   const { rows } = await db.query('SELECT * FROM operators ORDER BY name');
   res.json(rows);
 });

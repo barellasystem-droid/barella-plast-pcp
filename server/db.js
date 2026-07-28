@@ -118,6 +118,16 @@ async function init() {
     CREATE SEQUENCE IF NOT EXISTS orders_geral_seq;
     CREATE SEQUENCE IF NOT EXISTS orders_maquina_seq;
     CREATE SEQUENCE IF NOT EXISTS apontamentos_seq;
+
+    -- Cadastro público (auto-registro): dados de perfil além de login/senha.
+    -- ADD COLUMN IF NOT EXISTS porque users já existe em produção com dados reais.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS cpf TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS cep TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS rua TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS numero TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS bairro TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_cpf ON users(cpf) WHERE cpf IS NOT NULL;
   `);
 }
 

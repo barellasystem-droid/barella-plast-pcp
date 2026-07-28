@@ -3,7 +3,13 @@ import {
   Printer, Boxes, BarChart3, Users2, ShieldCheck, HardHat, Cog,
 } from 'lucide-react';
 
-export const ROLES = ['admin', 'pcp', 'operador', 'almoxarifado', 'qualidade', 'gerencia'];
+export const ROLES = ['admin', 'pcp', 'operador', 'almoxarifado', 'qualidade', 'gerencia', 'pendente'];
+
+// Perfis que um Administrador pode atribuir na criação de usuário e que
+// aparecem como coluna na matriz de Permissões — "pendente" fica de fora
+// dos dois: ninguém cria um usuário já pendente, e quem está pendente nunca
+// chega na tela de abas mesmo (ver PendingApprovalScreen em App.jsx).
+export const ASSIGNABLE_ROLES = ROLES.filter(r => r !== 'pendente');
 
 export const ROLE_LABELS = {
   admin: 'Administrador',
@@ -12,6 +18,7 @@ export const ROLE_LABELS = {
   almoxarifado: 'Almoxarifado',
   qualidade: 'Qualidade',
   gerencia: 'Gerência',
+  pendente: 'Pendente de Aprovação',
 };
 
 export const ROLE_STRIPE = {
@@ -21,6 +28,7 @@ export const ROLE_STRIPE = {
   almoxarifado: '#8B5FB0',
   qualidade: '#C1462E',
   gerencia: '#1B1D1F',
+  pendente: '#9A9FA4',
 };
 
 export const TABS = [

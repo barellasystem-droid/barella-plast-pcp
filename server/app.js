@@ -30,6 +30,7 @@ const loginLimiter = rateLimit({
   message: { error: 'Muitas tentativas de login. Aguarde alguns minutos e tente novamente.' },
 });
 app.use('/api/auth/login', loginLimiter);
+app.use('/api/auth/register', loginLimiter);
 
 // Cold start numa função serverless pode correr em paralelo com o
 // CREATE TABLE IF NOT EXISTS de db.js — garante que o schema já existe

@@ -38,6 +38,17 @@ async function getPermission(tabId, role) {
   return rows[0];
 }
 
+// Bloqueia quem está com cadastro pendente de aprovação (role 'pendente') de
+// rotas que hoje são "qualquer usuário autenticado pode ler" — sem isso, uma
+// conta recém-cadastrada pela internet (ainda não vetada por um Administrador)
+// conseguiria ler dados de produção direto pela API, mesmo sem ver nada na tela.
+function blockPending(req, res, next) {
+  if (req.user.role === 'pendente') {
+    return res.status(403).json({ error: 'Seu cadastro ainda não foi aprovado por um Administrador.' });
+  }
+  next();
+}
+
 // Middleware factory: requires the logged-in user's role to have VIEW access to tabId
 function requireView(tabId) {
   return async (req, res, next) => {
@@ -56,4 +67,4 @@ function requireEdit(tabId) {
   };
 }
 
-module.exports = { signToken, requireAuth, requireView, requireEdit, getPermission, JWT_SECRET };
+module.exports = { signToken, requireAuth, requireView, requireEdit, blockPending, getPermission, JWT_SECRET };

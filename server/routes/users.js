@@ -30,6 +30,15 @@ router.post('/', requireAuth, requireEdit('usuarios'), async (req, res) => {
   res.status(201).json({ id, username, name, role });
 });
 
+// Usado pelo Administrador para "direcionar" a função real de um usuário
+// recém-cadastrado (role 'pendente') ou trocar o perfil de qualquer outro.
+router.patch('/:id/role', requireAuth, requireEdit('usuarios'), async (req, res) => {
+  const { role } = req.body || {};
+  if (!ROLES.includes(role)) return res.status(400).json({ error: 'Perfil inválido.' });
+  await db.query('UPDATE users SET role = $1 WHERE id = $2', [role, req.params.id]);
+  res.json({ ok: true });
+});
+
 router.delete('/:id', requireAuth, requireEdit('usuarios'), async (req, res) => {
   if (req.params.id === req.user.id) return res.status(400).json({ error: 'Você não pode remover seu próprio usuário.' });
   await db.query('DELETE FROM users WHERE id = $1', [req.params.id]);
