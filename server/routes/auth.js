@@ -23,9 +23,23 @@ router.post('/register', async (req, res) => {
     return res.status(400).json({ error: 'Preencha todos os dados de cadastro (telefone, CPF e endereço).' });
   }
 
+  // Nome, rua e bairro são texto — não podem conter números.
+  if (/\d/.test(name) || /\d/.test(rua) || /\d/.test(bairro)) {
+    return res.status(400).json({ error: 'Nome completo, rua e bairro não podem conter números.' });
+  }
+
+  // Telefone, CPF e CEP são só dígitos — limpa qualquer formatação (traços, parênteses etc.) e valida o tamanho.
+  const cleanPhone = String(phone).replace(/\D/g, '');
   const cleanCpf = String(cpf).replace(/\D/g, '');
+  const cleanCep = String(cep).replace(/\D/g, '');
+  if (cleanPhone.length < 10 || cleanPhone.length > 11) {
+    return res.status(400).json({ error: 'Telefone inválido — informe DDD + número (10 ou 11 dígitos).' });
+  }
   if (cleanCpf.length !== 11) {
     return res.status(400).json({ error: 'CPF inválido — informe os 11 dígitos.' });
+  }
+  if (cleanCep.length !== 8) {
+    return res.status(400).json({ error: 'CEP inválido — informe os 8 dígitos.' });
   }
 
   const { rows: existingUser } = await db.query('SELECT 1 FROM users WHERE lower(username) = lower($1)', [String(username).trim()]);
@@ -38,7 +52,7 @@ router.post('/register', async (req, res) => {
   await db.query(
     `INSERT INTO users (id, username, password_hash, name, role, phone, cpf, cep, rua, numero, bairro)
      VALUES ($1, $2, $3, $4, 'pendente', $5, $6, $7, $8, $9, $10)`,
-    [id, String(username).trim(), bcrypt.hashSync(String(password), 10), name.trim(), phone.trim(), cleanCpf, cep.trim(), rua.trim(), String(numero).trim(), bairro.trim()]
+    [id, String(username).trim(), bcrypt.hashSync(String(password), 10), name.trim(), cleanPhone, cleanCpf, cleanCep, rua.trim(), String(numero).trim(), bairro.trim()]
   );
 
   const user = { id, username: String(username).trim(), name: name.trim(), role: 'pendente' };

@@ -31,7 +31,9 @@ export const styles = {
   formGrid: { display: 'grid', gap: 12, alignItems: 'start' },
   label: { display: 'block', fontSize: 11.5, color: '#6B7075', marginBottom: 4, fontWeight: 500 },
   input: { width: '100%', padding: '8px 10px', border: '1px solid #D5D8D9', borderRadius: 6, fontSize: 13, background: '#FBFBFA' },
-  eyeBtn: { position: 'absolute', right: 8, top: 30, background: 'transparent', border: 'none', cursor: 'pointer', color: '#6B7075' },
+  // top: '50%' + translateY centraliza o botão dentro do input, não importa a
+  // altura do label acima — evita ficar torto/baixo demais em telas diferentes.
+  eyeBtn: { position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', cursor: 'pointer', color: '#6B7075', display: 'flex', padding: 4 },
   primaryBtn: { display: 'flex', alignItems: 'center', gap: 6, background: '#E8A324', color: '#1B1D1F', border: 'none', padding: '9px 14px', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer' },
   secondaryBtn: { display: 'flex', alignItems: 'center', gap: 6, background: '#EDEFEF', color: '#1B1D1F', border: '1px solid #D5D8D9', padding: '9px 14px', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer' },
   iconBtn: { background: '#EDEFEF', border: '1px solid #D5D8D9', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 12 },

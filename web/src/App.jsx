@@ -238,6 +238,12 @@ export default function App() {
 
 /* ============================== LOGIN ============================== */
 
+// CEP/CPF/telefone só fazem sentido em dígitos; nome/rua/bairro são texto e
+// não devem aceitar números — filtra o valor enquanto a pessoa digita, em vez
+// de só reclamar depois no envio.
+function onlyDigits(v) { return v.replace(/\D/g, ''); }
+function onlyLetters(v) { return v.replace(/[0-9]/g, ''); }
+
 function LoginScreen({ onLogin, onRegister, error }) {
   const [mode, setMode] = useState('login'); // 'login' | 'register'
   const [username, setUsername] = useState('');
@@ -245,7 +251,8 @@ function LoginScreen({ onLogin, onRegister, error }) {
   const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const [regForm, setRegForm] = useState({ name: '', username: '', password: '', phone: '', cpf: '', cep: '', rua: '', numero: '', bairro: '' });
+  const [regForm, setRegForm] = useState({ name: '', username: '', password: '', confirmPassword: '', phone: '', cpf: '', cep: '', rua: '', numero: '', bairro: '' });
+  const [showRegPw, setShowRegPw] = useState(false);
   const [regErr, setRegErr] = useState('');
   const [regBusy, setRegBusy] = useState(false);
 
@@ -256,15 +263,24 @@ function LoginScreen({ onLogin, onRegister, error }) {
     setBusy(false);
   }
 
-  function setReg(field) {
-    return (e) => setRegForm(f => ({ ...f, [field]: e.target.value }));
+  // `format` opcional filtra o valor digitado (dígitos ou letras) antes de gravar no estado.
+  function setReg(field, format) {
+    return (e) => {
+      const v = format ? format(e.target.value) : e.target.value;
+      setRegForm(f => ({ ...f, [field]: v }));
+    };
   }
 
   async function submitRegister(e) {
     e.preventDefault();
     setRegErr('');
+    if (regForm.password !== regForm.confirmPassword) {
+      setRegErr('As senhas não coincidem — confira os dois campos.');
+      return;
+    }
     setRegBusy(true);
-    try { await onRegister(regForm); }
+    const { confirmPassword, ...payload } = regForm;
+    try { await onRegister(payload); }
     catch (err) { setRegErr(err.message || 'Não foi possível concluir o cadastro.'); }
     setRegBusy(false);
   }
@@ -306,31 +322,37 @@ function LoginScreen({ onLogin, onRegister, error }) {
           <>
             <form onSubmit={submitRegister}>
               <label style={styles.label}>Nome completo</label>
-              <input style={styles.input} value={regForm.name} onChange={setReg('name')} autoFocus />
+              <input style={styles.input} value={regForm.name} onChange={setReg('name', onlyLetters)} autoFocus />
 
               <label style={styles.label}>Usuário (login)</label>
               <input style={styles.input} value={regForm.username} onChange={setReg('username')} />
 
               <label style={styles.label}>Senha</label>
-              <input style={styles.input} type="password" value={regForm.password} onChange={setReg('password')} placeholder="mínimo 8 caracteres" />
+              <div style={{ position: 'relative' }}>
+                <input style={styles.input} type={showRegPw ? 'text' : 'password'} value={regForm.password} onChange={setReg('password')} placeholder="mínimo 8 caracteres" />
+                <button type="button" onClick={() => setShowRegPw(s => !s)} style={styles.eyeBtn}>{showRegPw ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+              </div>
+
+              <label style={styles.label}>Confirmar senha</label>
+              <input style={styles.input} type={showRegPw ? 'text' : 'password'} value={regForm.confirmPassword} onChange={setReg('confirmPassword')} placeholder="repita a senha" />
 
               <label style={styles.label}>Telefone</label>
-              <input style={styles.input} value={regForm.phone} onChange={setReg('phone')} placeholder="(00) 00000-0000" />
+              <input style={styles.input} value={regForm.phone} onChange={setReg('phone', onlyDigits)} placeholder="11999990000" maxLength={11} inputMode="numeric" />
 
               <label style={styles.label}>CPF</label>
-              <input style={styles.input} value={regForm.cpf} onChange={setReg('cpf')} placeholder="000.000.000-00" />
+              <input style={styles.input} value={regForm.cpf} onChange={setReg('cpf', onlyDigits)} placeholder="00000000000" maxLength={11} inputMode="numeric" />
 
               <label style={styles.label}>CEP</label>
-              <input style={styles.input} value={regForm.cep} onChange={setReg('cep')} placeholder="00000-000" />
+              <input style={styles.input} value={regForm.cep} onChange={setReg('cep', onlyDigits)} placeholder="00000000" maxLength={8} inputMode="numeric" />
 
               <label style={styles.label}>Rua</label>
-              <input style={styles.input} value={regForm.rua} onChange={setReg('rua')} />
+              <input style={styles.input} value={regForm.rua} onChange={setReg('rua', onlyLetters)} />
 
               <label style={styles.label}>Número</label>
               <input style={styles.input} value={regForm.numero} onChange={setReg('numero')} />
 
               <label style={styles.label}>Bairro</label>
-              <input style={styles.input} value={regForm.bairro} onChange={setReg('bairro')} />
+              <input style={styles.input} value={regForm.bairro} onChange={setReg('bairro', onlyLetters)} />
 
               {regErr && <div style={styles.errBox}><AlertTriangle size={14} /> {regErr}</div>}
 
@@ -1632,6 +1654,10 @@ function GlobalStyle() {
       input, select, button { font-family: var(--font-body); }
       input:focus, select:focus { outline: 2px solid #E8A324; outline-offset: 1px; }
       button:focus-visible { outline: 2px solid #E8A324; outline-offset: 2px; }
+
+      /* O sistema já tem seu próprio botão de mostrar/ocultar senha — some com
+         o ícone nativo do navegador (Edge/IE) pra não ficar duplicado por cima. */
+      input[type="password"]::-ms-reveal, input[type="password"]::-ms-clear { display: none; }
 
       .bp-sidebar { width: 250px; min-width: 250px; }
       .bp-menu-btn { display: none; }
