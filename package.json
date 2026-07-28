@@ -1,0 +1,25 @@
+{
+  "name": "barella-plast-pcp-server",
+  "version": "1.0.0",
+  "description": "Sistema de Ordem de Producao (PCP) - Barella Plast - backend com banco de dados e permissoes por perfil",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "seed": "node server/seed.js",
+    "migrate-to-postgres": "node server/migrate-to-postgres.js",
+    "build:web": "cd web && npm install && npm run build",
+    "setup": "npm install && npm run build:web && npm run seed"
+  },
+  "dependencies": {
+    "pg": "^8.13.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.4.0",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "sql.js": "^1.11.0"
+  }
+}

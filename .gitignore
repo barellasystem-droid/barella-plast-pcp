@@ -1,0 +1,12 @@
+node_modules/
+data/*.db
+data/*.db-*
+web/dist/
+.env
+.vercel
+
+# Arquivos grandes que não fazem parte do código (manual, backups zipados) —
+# não precisam ir para o repositório Git usado no deploy.
+*.zip
+*.docx
+settings.local.json
