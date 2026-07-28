@@ -1,4 +1,5 @@
 const express = require('express');
+require('express-async-errors'); // faz o Express 4 encaminhar erros de rotas `async` pro error handler abaixo, em vez de travar com uma resposta HTML genérica
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -55,5 +56,13 @@ app.use('/api/raw-materials', require('./routes/rawMaterials'));
 app.use('/api/orders-geral', require('./routes/ordersGeral'));
 app.use('/api/orders-maquina', require('./routes/ordersMaquina'));
 app.use('/api/apontamentos', require('./routes/apontamentos'));
+
+// Error handler final: qualquer erro não tratado (inclusive vindo de rotas
+// async, graças ao express-async-errors) cai aqui em vez de virar uma
+// página HTML genérica que o frontend não consegue interpretar como JSON.
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(err.status || 500).json({ error: 'Erro interno do servidor. Tente novamente em instantes.' });
+});
 
 module.exports = app;
