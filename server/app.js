@@ -62,8 +62,7 @@ app.use('/api/apontamentos', require('./routes/apontamentos'));
 // página HTML genérica que o frontend não consegue interpretar como JSON.
 app.use((err, req, res, next) => {
   console.error(err);
-  // TODO: reverter para mensagem genérica assim que o 500 em produção for diagnosticado.
-  res.status(err.status || 500).json({ error: 'Erro interno: ' + (err && err.message) });
+  res.status(err.status || 500).json({ error: 'Erro interno do servidor. Tente novamente em instantes.' });
 });
 
 module.exports = app;
