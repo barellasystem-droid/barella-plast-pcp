@@ -22,6 +22,15 @@ router.post('/', requireAuth, requireEdit(TAB), async (req, res) => {
   res.status(201).json({ id, nome: nome.trim(), ativa: 1 });
 });
 
+// Só corrige o cadastro para daqui pra frente — OPs de máquina e produtos que
+// já referenciam o nome antigo não são retroativamente alterados.
+router.put('/:id', requireAuth, requireEdit(TAB), async (req, res) => {
+  const { nome } = req.body || {};
+  if (!nome || !nome.trim()) return res.status(400).json({ error: 'Nome da injetora é obrigatório.' });
+  await db.query('UPDATE injetoras SET nome = $1 WHERE id = $2', [nome.trim(), req.params.id]);
+  res.json({ ok: true });
+});
+
 // Ativar/inativar em vez de excluir: preserva o histórico de OPs de máquina e
 // produtos que já referenciam o nome dessa injetora.
 router.patch('/:id/active', requireAuth, requireEdit(TAB), async (req, res) => {

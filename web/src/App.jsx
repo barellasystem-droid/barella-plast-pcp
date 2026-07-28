@@ -777,34 +777,54 @@ function Field({ label, children, wide }) {
 /* ============================== MATÉRIAS-PRIMAS ============================== */
 
 function MateriasPrimasTab({ rawMaterials, setRawMaterials, canEdit, onError }) {
-  const [form, setForm] = useState({ code: '', descricao: '', fornecedor: '', tipo: 'Virgem', unidade: 'kg', estoque: '' });
+  function emptyForm() { return { code: '', descricao: '', fornecedor: '', tipo: 'Virgem', unidade: 'kg', estoque: '' }; }
+  const [form, setForm] = useState(emptyForm());
+  const [editingCode, setEditingCode] = useState(null);
+
+  function startEdit(r) {
+    setForm({ code: r.code, descricao: r.descricao || '', fornecedor: r.fornecedor || '', tipo: r.tipo || 'Virgem', unidade: r.unidade || 'kg', estoque: r.estoque ?? '' });
+    setEditingCode(r.code);
+  }
+  function cancelEdit() { setForm(emptyForm()); setEditingCode(null); }
 
   async function submit(e) {
     e.preventDefault();
     if (!form.code || !form.descricao) return;
     try {
-      await api.rawMaterials.create(form);
-      setRawMaterials([...rawMaterials, form]);
-      setForm({ code: '', descricao: '', fornecedor: '', tipo: 'Virgem', unidade: 'kg', estoque: '' });
+      if (editingCode) {
+        await api.rawMaterials.update(editingCode, form);
+        setRawMaterials(rawMaterials.map(r => r.code === editingCode ? { ...r, ...form } : r));
+      } else {
+        await api.rawMaterials.create(form);
+        setRawMaterials([...rawMaterials, form]);
+      }
+      setForm(emptyForm());
+      setEditingCode(null);
     } catch (e) { onError(e.message); }
   }
   async function remove(code) {
-    try { await api.rawMaterials.remove(code); setRawMaterials(rawMaterials.filter(r => r.code !== code)); }
-    catch (e) { onError(e.message); }
+    try {
+      await api.rawMaterials.remove(code);
+      setRawMaterials(rawMaterials.filter(r => r.code !== code));
+      if (editingCode === code) cancelEdit();
+    } catch (e) { onError(e.message); }
   }
 
   return (
     <div>
       {canEdit && (
         <div style={styles.card}>
-          <div style={styles.cardTitle}>Nova matéria-prima</div>
+          <div style={styles.cardTitle}>{editingCode ? `Editar matéria-prima: ${editingCode}` : 'Nova matéria-prima'}</div>
           <form onSubmit={submit} className="bp-form-grid" style={styles.formGrid}>
-            <Field label="Código MP"><input style={styles.input} value={form.code} onChange={e => setForm({ ...form, code: e.target.value })} /></Field>
+            <Field label="Código MP"><input style={styles.input} value={form.code} disabled={!!editingCode} onChange={e => setForm({ ...form, code: e.target.value })} /></Field>
             <Field label="Descrição" wide><input style={styles.input} value={form.descricao} onChange={e => setForm({ ...form, descricao: e.target.value })} /></Field>
             <Field label="Fornecedor"><input style={styles.input} value={form.fornecedor} onChange={e => setForm({ ...form, fornecedor: e.target.value })} /></Field>
             <Field label="Tipo"><select style={styles.input} value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })}><option>Virgem</option><option>Moído</option><option>Pigmento</option></select></Field>
             <Field label="Estoque atual (kg)"><input type="number" style={styles.input} value={form.estoque} onChange={e => setForm({ ...form, estoque: e.target.value })} /></Field>
-            <div style={{ display: 'flex', alignItems: 'flex-end' }}><button type="submit" style={styles.primaryBtn}><Plus size={14} /> Adicionar</button></div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+              <button type="submit" style={styles.primaryBtn}>{editingCode ? <><Save size={14} /> Salvar</> : <><Plus size={14} /> Adicionar</>}</button>
+              {editingCode && <button type="button" style={styles.secondaryBtn} onClick={cancelEdit}><X size={14} /> Cancelar</button>}
+            </div>
           </form>
         </div>
       )}
@@ -812,7 +832,15 @@ function MateriasPrimasTab({ rawMaterials, setRawMaterials, canEdit, onError }) 
         <div style={styles.cardTitle}>Matérias-primas ({rawMaterials.length})</div>
         <Table
           columns={['Código', 'Descrição', 'Fornecedor', 'Tipo', 'Estoque (kg)', canEdit ? 'Ações' : null].filter(Boolean)}
-          rows={rawMaterials.map(r => [<span style={styles.mono}>{r.code}</span>, r.descricao, r.fornecedor, r.tipo, fmt(r.estoque, 0), canEdit ? <button style={styles.iconBtnDanger} onClick={() => remove(r.code)}><Trash2 size={13} /></button> : null].filter(v => v !== null))}
+          rows={rawMaterials.map(r => [
+            <span style={styles.mono}>{r.code}</span>, r.descricao, r.fornecedor, r.tipo, fmt(r.estoque, 0),
+            canEdit ? (
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button style={styles.iconBtn} onClick={() => startEdit(r)}><Pencil size={13} /></button>
+                <button style={styles.iconBtnDanger} onClick={() => remove(r.code)}><Trash2 size={13} /></button>
+              </div>
+            ) : null,
+          ].filter(v => v !== null))}
         />
       </div>
     </div>
@@ -888,15 +916,23 @@ function OperadoresTab({ operators, reloadOperators, canEdit, onError }) {
 
 function InjetorasTab({ injetoras, reloadInjetoras, canEdit, onError }) {
   const [nome, setNome] = useState('');
+  const [editingId, setEditingId] = useState(null);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => { reloadInjetoras().then(() => setLoaded(true)); /* eslint-disable-next-line */ }, []);
 
+  function startEdit(i) { setEditingId(i.id); setNome(i.nome); }
+  function cancelEdit() { setEditingId(null); setNome(''); }
+
   async function submit(e) {
     e.preventDefault();
     if (!nome.trim()) return;
-    try { await api.injetoras.create({ nome }); await reloadInjetoras(); setNome(''); }
-    catch (e) { onError(e.message); }
+    try {
+      if (editingId) await api.injetoras.update(editingId, { nome });
+      else await api.injetoras.create({ nome });
+      await reloadInjetoras();
+      setNome(''); setEditingId(null);
+    } catch (e) { onError(e.message); }
   }
   async function setActive(id, active) {
     try { await api.injetoras.setActive(id, active); await reloadInjetoras(); }
@@ -907,10 +943,13 @@ function InjetorasTab({ injetoras, reloadInjetoras, canEdit, onError }) {
     <div>
       {canEdit && (
         <div style={styles.card}>
-          <div style={styles.cardTitle}>Nova injetora</div>
+          <div style={styles.cardTitle}>{editingId ? 'Editar injetora' : 'Nova injetora'}</div>
           <form onSubmit={submit} className="bp-form-grid" style={styles.formGrid}>
             <Field label="Nome / identificação" wide><input style={styles.input} value={nome} onChange={e => setNome(e.target.value)} placeholder="ex: INJ-11" /></Field>
-            <div style={{ display: 'flex', alignItems: 'flex-end' }}><button type="submit" style={styles.primaryBtn}><Plus size={14} /> Cadastrar injetora</button></div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+              <button type="submit" style={styles.primaryBtn}>{editingId ? <><Save size={14} /> Salvar</> : <><Plus size={14} /> Cadastrar injetora</>}</button>
+              {editingId && <button type="button" style={styles.secondaryBtn} onClick={cancelEdit}><X size={14} /> Cancelar</button>}
+            </div>
           </form>
         </div>
       )}
@@ -923,9 +962,12 @@ function InjetorasTab({ injetoras, reloadInjetoras, canEdit, onError }) {
               i.nome,
               <span style={{ ...styles.badge, background: (i.ativa ? '#4C8C6B' : '#8A8F94') + '22', color: i.ativa ? '#4C8C6B' : '#8A8F94' }}>{i.ativa ? 'Ativa' : 'Inativa'}</span>,
               canEdit ? (
-                i.ativa
-                  ? <button style={styles.secondaryBtn} onClick={() => setActive(i.id, false)}>Inativar</button>
-                  : <button style={styles.secondaryBtn} onClick={() => setActive(i.id, true)}>Ativar</button>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button style={styles.iconBtn} onClick={() => startEdit(i)}><Pencil size={13} /></button>
+                  {i.ativa
+                    ? <button style={styles.secondaryBtn} onClick={() => setActive(i.id, false)}>Inativar</button>
+                    : <button style={styles.secondaryBtn} onClick={() => setActive(i.id, true)}>Ativar</button>}
+                </div>
               ) : null,
             ].filter(v => v !== null))}
           />

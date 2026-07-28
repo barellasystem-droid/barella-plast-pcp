@@ -50,6 +50,7 @@ export const api = {
   rawMaterials: {
     list: () => request('GET', '/raw-materials'),
     create: (r) => request('POST', '/raw-materials', r),
+    update: (code, r) => request('PUT', `/raw-materials/${code}`, r),
     remove: (code) => request('DELETE', `/raw-materials/${code}`),
   },
   productMaterials: {
@@ -64,6 +65,7 @@ export const api = {
   injetoras: {
     list: () => request('GET', '/injetoras'),
     create: (i) => request('POST', '/injetoras', i),
+    update: (id, i) => request('PUT', `/injetoras/${id}`, i),
     setActive: (id, active) => request('PATCH', `/injetoras/${id}/active`, { active }),
   },
   ordersGeral: {

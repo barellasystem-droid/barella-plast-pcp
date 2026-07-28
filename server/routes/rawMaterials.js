@@ -27,6 +27,16 @@ router.post('/', requireAuth, requireEdit(TAB), async (req, res) => {
   res.status(201).json(r);
 });
 
+router.put('/:code', requireAuth, requireEdit(TAB), async (req, res) => {
+  const r = req.body || {};
+  if (!r.descricao) return res.status(400).json({ error: 'Descrição é obrigatória.' });
+  await db.query(
+    `UPDATE raw_materials SET descricao=$1, fornecedor=$2, tipo=$3, unidade=$4, estoque=$5 WHERE code=$6`,
+    [r.descricao, r.fornecedor || '', r.tipo || 'Virgem', r.unidade || 'kg', Number(r.estoque) || 0, req.params.code]
+  );
+  res.json({ ok: true });
+});
+
 router.delete('/:code', requireAuth, requireEdit(TAB), async (req, res) => {
   await db.query('DELETE FROM raw_materials WHERE code = $1', [req.params.code]);
   res.json({ ok: true });
