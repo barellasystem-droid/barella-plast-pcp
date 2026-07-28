@@ -251,7 +251,7 @@ function LoginScreen({ onLogin, onRegister, error }) {
   const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const [regForm, setRegForm] = useState({ name: '', username: '', password: '', confirmPassword: '', phone: '', cpf: '', cep: '', rua: '', numero: '', bairro: '' });
+  const [regForm, setRegForm] = useState({ name: '', username: '', email: '', password: '', confirmPassword: '', phone: '', cpf: '', cep: '', rua: '', numero: '', bairro: '' });
   const [showRegPw, setShowRegPw] = useState(false);
   const [regErr, setRegErr] = useState('');
   const [regBusy, setRegBusy] = useState(false);
@@ -270,6 +270,8 @@ function LoginScreen({ onLogin, onRegister, error }) {
       setRegForm(f => ({ ...f, [field]: v }));
     };
   }
+
+  const pwMismatch = regForm.confirmPassword.length > 0 && regForm.password !== regForm.confirmPassword;
 
   async function submitRegister(e) {
     e.preventDefault();
@@ -327,6 +329,9 @@ function LoginScreen({ onLogin, onRegister, error }) {
               <label style={styles.label}>Usuário (login)</label>
               <input style={styles.input} value={regForm.username} onChange={setReg('username')} />
 
+              <label style={styles.label}>E-mail</label>
+              <input style={styles.input} type="email" value={regForm.email} onChange={setReg('email')} placeholder="seu.email@exemplo.com" />
+
               <label style={styles.label}>Senha</label>
               <div style={{ position: 'relative' }}>
                 <input style={styles.input} type={showRegPw ? 'text' : 'password'} value={regForm.password} onChange={setReg('password')} placeholder="mínimo 8 caracteres" />
@@ -335,6 +340,7 @@ function LoginScreen({ onLogin, onRegister, error }) {
 
               <label style={styles.label}>Confirmar senha</label>
               <input style={styles.input} type={showRegPw ? 'text' : 'password'} value={regForm.confirmPassword} onChange={setReg('confirmPassword')} placeholder="repita a senha" />
+              {pwMismatch && <div style={styles.fieldError}>As senhas não coincidem.</div>}
 
               <label style={styles.label}>Telefone</label>
               <input style={styles.input} value={regForm.phone} onChange={setReg('phone', onlyDigits)} placeholder="11999990000" maxLength={11} inputMode="numeric" />
@@ -356,7 +362,7 @@ function LoginScreen({ onLogin, onRegister, error }) {
 
               {regErr && <div style={styles.errBox}><AlertTriangle size={14} /> {regErr}</div>}
 
-              <button type="submit" style={styles.loginBtn} disabled={regBusy}>{regBusy ? 'Cadastrando…' : 'Cadastrar'}</button>
+              <button type="submit" style={styles.loginBtn} disabled={regBusy || pwMismatch}>{regBusy ? 'Cadastrando…' : 'Cadastrar'}</button>
             </form>
 
             <button type="button" style={styles.demoToggle} onClick={() => setMode('login')}>

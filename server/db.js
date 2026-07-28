@@ -127,7 +127,9 @@ async function init() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS rua TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS numero TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS bairro TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_cpf ON users(cpf) WHERE cpf IS NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(lower(email)) WHERE email IS NOT NULL;
   `);
 }
 

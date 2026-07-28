@@ -57,6 +57,7 @@ export const styles = {
   loginHeader: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 22 },
   loginBtn: { width: '100%', marginTop: 14, background: '#E8A324', color: '#1B1D1F', border: 'none', padding: '11px 14px', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer' },
   errBox: { display: 'flex', alignItems: 'center', gap: 6, background: '#FBEAE6', color: '#C1462E', padding: '8px 10px', borderRadius: 6, fontSize: 12.5, marginTop: 10 },
+  fieldError: { color: '#C1462E', fontSize: 11.5, marginTop: 4 },
   demoToggle: { display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: 'none', color: '#3E6E91', fontSize: 12.5, marginTop: 18, cursor: 'pointer', padding: 0 },
   demoBox: { marginTop: 10, background: '#F5F6F6', borderRadius: 8, padding: 10 },
   demoRow: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, padding: '4px 0' },

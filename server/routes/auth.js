@@ -11,16 +11,21 @@ const router = express.Router();
 // 'pendente' (sem acesso a nenhuma aba) até um Administrador definir a
 // função real em Usuários. Já retorna token pra cair direto na tela de
 // aguardando aprovação, sem exigir login separado.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 router.post('/register', async (req, res) => {
-  const { username, password, name, phone, cpf, cep, rua, numero, bairro } = req.body || {};
+  const { username, password, name, email, phone, cpf, cep, rua, numero, bairro } = req.body || {};
   if (!username || !password || !name) {
     return res.status(400).json({ error: 'Usuário, senha e nome completo são obrigatórios.' });
   }
   if (String(password).length < 8) {
     return res.status(400).json({ error: 'A senha deve ter no mínimo 8 caracteres.' });
   }
-  if (!phone || !cpf || !cep || !rua || !numero || !bairro) {
-    return res.status(400).json({ error: 'Preencha todos os dados de cadastro (telefone, CPF e endereço).' });
+  if (!email || !phone || !cpf || !cep || !rua || !numero || !bairro) {
+    return res.status(400).json({ error: 'Preencha todos os dados de cadastro (e-mail, telefone, CPF e endereço).' });
+  }
+  if (!EMAIL_RE.test(String(email).trim())) {
+    return res.status(400).json({ error: 'E-mail inválido.' });
   }
 
   // Nome, rua e bairro são texto — não podem conter números.
@@ -48,11 +53,14 @@ router.post('/register', async (req, res) => {
   const { rows: existingCpf } = await db.query('SELECT 1 FROM users WHERE cpf = $1', [cleanCpf]);
   if (existingCpf[0]) return res.status(409).json({ error: 'Já existe um cadastro com esse CPF.' });
 
+  const { rows: existingEmail } = await db.query('SELECT 1 FROM users WHERE lower(email) = lower($1)', [String(email).trim()]);
+  if (existingEmail[0]) return res.status(409).json({ error: 'Já existe um cadastro com esse e-mail.' });
+
   const id = crypto.randomUUID();
   await db.query(
-    `INSERT INTO users (id, username, password_hash, name, role, phone, cpf, cep, rua, numero, bairro)
-     VALUES ($1, $2, $3, $4, 'pendente', $5, $6, $7, $8, $9, $10)`,
-    [id, String(username).trim(), bcrypt.hashSync(String(password), 10), name.trim(), cleanPhone, cleanCpf, cleanCep, rua.trim(), String(numero).trim(), bairro.trim()]
+    `INSERT INTO users (id, username, password_hash, name, role, email, phone, cpf, cep, rua, numero, bairro)
+     VALUES ($1, $2, $3, $4, 'pendente', $5, $6, $7, $8, $9, $10, $11)`,
+    [id, String(username).trim(), bcrypt.hashSync(String(password), 10), name.trim(), String(email).trim(), cleanPhone, cleanCpf, cleanCep, rua.trim(), String(numero).trim(), bairro.trim()]
   );
 
   const user = { id, username: String(username).trim(), name: name.trim(), role: 'pendente' };

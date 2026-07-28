@@ -3,6 +3,7 @@ data/*.db
 data/*.db-*
 web/dist/
 .env
+.env.local
 .vercel
 
 # Arquivos grandes que não fazem parte do código (manual, backups zipados) —
