@@ -152,6 +152,9 @@ async function init() {
     CREATE INDEX IF NOT EXISTS idx_stock_movements_rawmat ON stock_movements(raw_material_code);
     CREATE INDEX IF NOT EXISTS idx_stock_movements_product ON stock_movements(product_code);
     CREATE INDEX IF NOT EXISTS idx_stock_movements_created ON stock_movements(created_at DESC);
+
+    ALTER TABLE operators ADD COLUMN IF NOT EXISTS turno TEXT;
+    ALTER TABLE operators ADD COLUMN IF NOT EXISTS funcao TEXT;
   `);
 }
 

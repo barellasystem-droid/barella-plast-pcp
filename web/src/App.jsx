@@ -854,23 +854,24 @@ function MateriasPrimasTab({ rawMaterials, setRawMaterials, canEdit, onError }) 
 /* ============================== OPERADORES ============================== */
 
 function OperadoresTab({ operators, reloadOperators, canEdit, onError }) {
-  const [name, setName] = useState('');
+  function emptyForm() { return { name: '', turno: TURNOS[0], funcao: '' }; }
+  const [form, setForm] = useState(emptyForm());
   const [editingId, setEditingId] = useState(null);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => { reloadOperators().then(() => setLoaded(true)); /* eslint-disable-next-line */ }, []);
 
-  function startEdit(o) { setEditingId(o.id); setName(o.name); }
-  function cancelEdit() { setEditingId(null); setName(''); }
+  function startEdit(o) { setEditingId(o.id); setForm({ name: o.name, turno: o.turno || TURNOS[0], funcao: o.funcao || '' }); }
+  function cancelEdit() { setEditingId(null); setForm(emptyForm()); }
 
   async function submit(e) {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!form.name.trim()) return;
     try {
-      if (editingId) await api.operators.update(editingId, { name });
-      else await api.operators.create({ name });
+      if (editingId) await api.operators.update(editingId, form);
+      else await api.operators.create(form);
       await reloadOperators();
-      setName(''); setEditingId(null);
+      setForm(emptyForm()); setEditingId(null);
     } catch (e) { onError(e.message); }
   }
   async function setActive(id, active) {
@@ -884,7 +885,13 @@ function OperadoresTab({ operators, reloadOperators, canEdit, onError }) {
         <div style={styles.card}>
           <div style={styles.cardTitle}>{editingId ? 'Editar operador' : 'Novo operador'}</div>
           <form onSubmit={submit} className="bp-form-grid" style={styles.formGrid}>
-            <Field label="Nome completo" wide><input style={styles.input} value={name} onChange={e => setName(e.target.value)} /></Field>
+            <Field label="Nome completo" wide><input style={styles.input} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></Field>
+            <Field label="Turno">
+              <select style={styles.input} value={form.turno} onChange={e => setForm({ ...form, turno: e.target.value })}>
+                {TURNOS.map(t => <option key={t}>{t}</option>)}
+              </select>
+            </Field>
+            <Field label="Função"><input style={styles.input} value={form.funcao} onChange={e => setForm({ ...form, funcao: e.target.value })} placeholder="ex: Operador de injetora" /></Field>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
               <button type="submit" style={styles.primaryBtn}>{editingId ? <><Save size={14} /> Salvar</> : <><Plus size={14} /> Cadastrar operador</>}</button>
               {editingId && <button type="button" style={styles.secondaryBtn} onClick={cancelEdit}><X size={14} /> Cancelar</button>}
@@ -896,9 +903,9 @@ function OperadoresTab({ operators, reloadOperators, canEdit, onError }) {
         <div style={styles.cardTitle}>Operadores cadastrados ({operators.length})</div>
         {!loaded ? <div style={styles.emptyState}>Carregando…</div> : (
           <Table
-            columns={['Nome', 'Status', canEdit ? 'Ações' : null].filter(Boolean)}
+            columns={['Nome', 'Turno', 'Função', 'Status', canEdit ? 'Ações' : null].filter(Boolean)}
             rows={operators.map(o => [
-              o.name,
+              o.name, o.turno || '—', o.funcao || '—',
               <span style={{ ...styles.badge, background: (o.active ? '#4C8C6B' : '#8A8F94') + '22', color: o.active ? '#4C8C6B' : '#8A8F94' }}>{o.active ? 'Ativo' : 'Inativo'}</span>,
               canEdit ? (
                 <div style={{ display: 'flex', gap: 6 }}>
@@ -1015,7 +1022,7 @@ function CompositionList({ materiais, rmByCode }) {
 
 function computeOG(og, products, productMaterials) {
   const p = products.find(x => x.code === og.product_code) || {};
-  const kgNecessario = (Number(og.qtd_planejada) || 0) * (Number(p.peso) || 0) / 1000;
+  const kgNecessario = (Number(og.qtd_planejada) || 0) * (Number(p.peso) || 0) * (Number(p.cavidades) || 1) / 1000;
   return { ...og, product: p, kgNecessario, materiais: materialBreakdown(og.product_code, kgNecessario, productMaterials) };
 }
 
@@ -1167,7 +1174,7 @@ function DistribuicaoTab({ ordersGeral, ordersMaquina, setOrdersMaquina, product
   function computeOM(om) {
     const og = ordersGeral.find(o => o.id === om.op_geral_id) || {};
     const p = products.find(x => x.code === og.product_code) || {};
-    const kgProgramado = (Number(om.qtd_programada) || 0) * (Number(p.peso) || 0) / 1000;
+    const kgProgramado = (Number(om.qtd_programada) || 0) * (Number(p.peso) || 0) * (Number(p.cavidades) || 1) / 1000;
     return { ...om, og, product: p, kgProgramado, materiais: materialBreakdown(og.product_code, kgProgramado, productMaterials) };
   }
   const rmByCode = Object.fromEntries(rawMaterials.map(r => [r.code, r]));
@@ -1269,7 +1276,7 @@ function ApontamentoTab({ ordersMaquina, ordersGeral, products, operators, apont
     const p = products.find(x => x.code === og.product_code) || {};
     const qtdBoa = (Number(ap.qtd_produzida) || 0) - (Number(ap.refugo) || 0);
     const atingimento = om.qtd_programada ? (qtdBoa / Number(om.qtd_programada)) * 100 : 0;
-    const kgConsumido = (Number(ap.qtd_produzida) || 0) * (Number(p.peso) || 0) / 1000;
+    const kgConsumido = (Number(ap.qtd_produzida) || 0) * (Number(p.peso) || 0) * (Number(p.cavidades) || 1) / 1000;
     return { ...ap, qtdBoa, atingimento, kgConsumido };
   }
   const computed = apontamentos.map(computeAP);
@@ -1351,7 +1358,7 @@ function OpGeralImpressao({ ordersGeral, products, productMaterials, rmByCode })
   const [selected, setSelected] = useState('');
   const og = ordersGeral.find(o => o.id === selected);
   const p = og ? products.find(x => x.code === og.product_code) : null;
-  const kgNecessario = og ? (Number(og.qtd_planejada) || 0) * (Number(p?.peso) || 0) / 1000 : 0;
+  const kgNecessario = og ? (Number(og.qtd_planejada) || 0) * (Number(p?.peso) || 0) * (Number(p?.cavidades) || 1) / 1000 : 0;
   const materiais = og ? materialBreakdown(og.product_code, kgNecessario, productMaterials) : [];
 
   return (
@@ -1458,7 +1465,7 @@ function ConsolidadoMPTab({ ordersMaquina, ordersGeral, products, productMateria
   const rows = filtered.map(om => {
     const og = ordersGeral.find(o => o.id === om.op_geral_id) || {};
     const p = products.find(x => x.code === og.product_code) || {};
-    const kg = (Number(om.qtd_programada) || 0) * (Number(p.peso) || 0) / 1000;
+    const kg = (Number(om.qtd_programada) || 0) * (Number(p.peso) || 0) * (Number(p.cavidades) || 1) / 1000;
     const materiais = materialBreakdown(og.product_code, kg, productMaterials);
     materiais.forEach(m => { aggregated[m.rawMaterialCode] = (aggregated[m.rawMaterialCode] || 0) + m.kg; });
     return { om, p, kg, materiais };
@@ -1738,7 +1745,7 @@ function PerdasOperadoresTab({ apontamentos, products, ordersMaquina, ordersGera
     const p = og ? products.find(x => x.code === og.product_code) : null;
     byOperador[key].produzida += Number(a.qtd_produzida || 0);
     byOperador[key].refugo += Number(a.refugo || 0);
-    byOperador[key].kg += (Number(a.qtd_produzida) || 0) * (Number(p?.peso) || 0) / 1000;
+    byOperador[key].kg += (Number(a.qtd_produzida) || 0) * (Number(p?.peso) || 0) * (Number(p?.cavidades) || 1) / 1000;
   });
 
   const rows = Object.entries(byOperador).map(([op, v]) => {

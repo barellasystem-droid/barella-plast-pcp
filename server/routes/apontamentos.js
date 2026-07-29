@@ -41,8 +41,8 @@ router.post('/', requireAuth, requireEdit(TAB), async (req, res) => {
     const { rows: ogRows } = await db.query('SELECT product_code FROM orders_geral WHERE id = $1', [om.op_geral_id]);
     productCode = ogRows[0]?.product_code || null;
     if (productCode) {
-      const { rows: prodRows } = await db.query('SELECT peso FROM products WHERE code = $1', [productCode]);
-      const kgConsumido = qtdProduzida * (Number(prodRows[0]?.peso) || 0) / 1000;
+      const { rows: prodRows } = await db.query('SELECT peso, cavidades FROM products WHERE code = $1', [productCode]);
+      const kgConsumido = qtdProduzida * (Number(prodRows[0]?.peso) || 0) * (Number(prodRows[0]?.cavidades) || 1) / 1000;
       const { rows: compRows } = await db.query('SELECT raw_material_code, percentual FROM product_materials WHERE product_code = $1', [productCode]);
       materiais = compRows
         .map(c => ({ rawMaterialCode: c.raw_material_code, kg: kgConsumido * (Number(c.percentual) || 0) / 100 }))

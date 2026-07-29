@@ -14,20 +14,26 @@ router.get('/', requireAuth, blockPending, async (req, res) => {
 });
 
 router.post('/', requireAuth, requireEdit(TAB), async (req, res) => {
-  const { name } = req.body || {};
+  const { name, turno, funcao } = req.body || {};
   if (!name || !name.trim()) return res.status(400).json({ error: 'Nome do operador é obrigatório.' });
 
   const id = crypto.randomUUID();
-  await db.query('INSERT INTO operators (id, name, active) VALUES ($1, $2, 1)', [id, name.trim()]);
-  res.status(201).json({ id, name: name.trim(), active: 1 });
+  await db.query(
+    'INSERT INTO operators (id, name, active, turno, funcao) VALUES ($1, $2, 1, $3, $4)',
+    [id, name.trim(), turno || '', funcao || '']
+  );
+  res.status(201).json({ id, name: name.trim(), active: 1, turno: turno || '', funcao: funcao || '' });
 });
 
 // Só corrige o cadastro para daqui pra frente — OPs de máquina e apontamentos
 // já lançados guardam o nome como estava no momento, não são retroativamente alterados.
 router.put('/:id', requireAuth, requireEdit(TAB), async (req, res) => {
-  const { name } = req.body || {};
+  const { name, turno, funcao } = req.body || {};
   if (!name || !name.trim()) return res.status(400).json({ error: 'Nome do operador é obrigatório.' });
-  await db.query('UPDATE operators SET name = $1 WHERE id = $2', [name.trim(), req.params.id]);
+  await db.query(
+    'UPDATE operators SET name = $1, turno = $2, funcao = $3 WHERE id = $4',
+    [name.trim(), turno || '', funcao || '', req.params.id]
+  );
   res.json({ ok: true });
 });
 
