@@ -730,6 +730,9 @@ function CadastrosTab({ products, setProducts, rawMaterials, productMaterials, r
                   <label style={styles.label}>%</label>
                   <input type="number" step="0.1" style={styles.input} value={m.percentual} onChange={e => updateMaterial(idx, 'percentual', e.target.value)} />
                 </div>
+                <div style={{ ...styles.caption, paddingBottom: 9, minWidth: 70 }}>
+                  {m.rawMaterialCode ? `= ${fmt((Number(form.peso) || 0) * (Number(m.percentual) || 0) / 100)} g` : ''}
+                </div>
                 <button type="button" style={styles.iconBtnDanger} onClick={() => removeMaterialRow(idx)}><Trash2 size={13} /></button>
               </div>
             ))}
@@ -752,7 +755,7 @@ function CadastrosTab({ products, setProducts, rawMaterials, productMaterials, r
           rows={products.map(p => {
             const mats = productMaterials.filter(m => m.product_code === p.code);
             const compStr = mats.length
-              ? mats.map(m => `${rmByCode[m.raw_material_code]?.descricao || m.raw_material_code} ${fmt(m.percentual, 1)}%`).join(' · ')
+              ? mats.map(m => `${rmByCode[m.raw_material_code]?.descricao || m.raw_material_code} ${fmt(m.percentual, 1)}% (${fmt((Number(p.peso) || 0) * (Number(m.percentual) || 0) / 100)} g)`).join(' · ')
               : '—';
             return [
               <span style={styles.mono}>{p.code}</span>, p.name, p.molde, p.maquina, fmt(p.peso), compStr, p.cavidades,
