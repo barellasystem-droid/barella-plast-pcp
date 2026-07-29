@@ -837,7 +837,7 @@ function MateriasPrimasTab({ rawMaterials, setRawMaterials, canEdit, onError }) 
         <Table
           columns={['Código', 'Descrição', 'Fornecedor', 'Tipo', 'Estoque (kg)', canEdit ? 'Ações' : null].filter(Boolean)}
           rows={rawMaterials.map(r => [
-            <span style={styles.mono}>{r.code}</span>, r.descricao, r.fornecedor, r.tipo, fmt(r.estoque, 0),
+            <span style={styles.mono}>{r.code}</span>, r.descricao, r.fornecedor, r.tipo, fmt(r.estoque, 3),
             canEdit ? (
               <div style={{ display: 'flex', gap: 6 }}>
                 <button style={styles.iconBtn} onClick={() => startEdit(r)}><Pencil size={13} /></button>
@@ -1013,7 +1013,7 @@ function CompositionList({ materiais, rmByCode }) {
     <div>
       {materiais.map(m => (
         <div key={m.rawMaterialCode} style={{ fontSize: 12.5, whiteSpace: 'nowrap' }}>
-          {rmByCode[m.rawMaterialCode]?.descricao || m.rawMaterialCode}: <b>{fmt(m.kg)} kg</b>
+          {rmByCode[m.rawMaterialCode]?.descricao || m.rawMaterialCode}: <b>{fmt(m.kg, 3)} kg</b>
         </div>
       ))}
     </div>
@@ -1104,7 +1104,7 @@ function ProgramacaoGeralTab({ ordersGeral, setOrdersGeral, products, productMat
           columns={['Nº OP', 'Data', 'Prior.', 'Produto', 'Qtd.', 'Kg necessário', 'Composição (kg)', 'Status', 'Material', canEdit ? 'Ações' : null].filter(Boolean)}
           rows={computed.map(o => [
             <span style={styles.mono}>{o.id}</span>, o.date, o.priority, `${o.product_code} — ${o.product.name || '?'}`,
-            fmt(o.qtd_planejada, 0), fmt(o.kgNecessario), <CompositionList materiais={o.materiais} rmByCode={rmByCode} />,
+            fmt(o.qtd_planejada, 0), fmt(o.kgNecessario, 3), <CompositionList materiais={o.materiais} rmByCode={rmByCode} />,
             canEdit ? <select style={{ ...styles.input, padding: '4px 6px' }} value={o.status} onChange={e => updateStatus(o.id, e.target.value)}>{STATUS_OP.map(s => <option key={s}>{s}</option>)}</select> : <StatusBadge status={o.status} />,
             o.entregue_em ? (
               <span style={{ ...styles.badge, background: '#4C8C6B22', color: '#4C8C6B' }}>Entregue em {new Date(o.entregue_em).toLocaleDateString('pt-BR')}</span>
@@ -1321,7 +1321,7 @@ function ApontamentoTab({ ordersMaquina, ordersGeral, products, operators, apont
           columns={['Nº', 'OP Máquina', 'Turno', 'Operador', 'Produzida', 'Refugo', 'Boa', 'Atingimento', 'Kg consumido', canEdit ? 'Ações' : null].filter(Boolean)}
           rows={computed.map(a => [
             <span style={styles.mono}>{a.id}</span>, a.op_maquina_id, a.turno, a.operador || '—',
-            fmt(a.qtd_produzida, 0), fmt(a.refugo, 0), fmt(a.qtdBoa, 0), `${fmt(a.atingimento, 1)}%`, fmt(a.kgConsumido),
+            fmt(a.qtd_produzida, 0), fmt(a.refugo, 0), fmt(a.qtdBoa, 0), `${fmt(a.atingimento, 1)}%`, fmt(a.kgConsumido, 3),
             canEdit ? <button style={styles.iconBtnDanger} onClick={() => remove(a.id)}><Trash2 size={13} /></button> : null,
           ].filter(v => v !== null))}
         />
@@ -1382,12 +1382,12 @@ function OpGeralImpressao({ ordersGeral, products, productMaterials, rmByCode })
             <InfoRow label="Código" value={og.product_code} />
             <InfoRow label="Produto" value={p?.name} />
             <InfoRow label="Qtd. planejada (peças)" value={fmt(og.qtd_planejada, 0)} />
-            <InfoRow label="Kg total necessário" value={`${fmt(kgNecessario)} kg`} />
+            <InfoRow label="Kg total necessário" value={`${fmt(kgNecessario, 3)} kg`} />
           </div>
           <div style={styles.subTitle}>Composição de matéria-prima a separar</div>
           <Table
             columns={['Matéria-prima', '%', 'Kg necessário']}
-            rows={materiais.map(m => [rmByCode[m.rawMaterialCode]?.descricao || m.rawMaterialCode, `${fmt(m.percentual, 1)}%`, `${fmt(m.kg)} kg`])}
+            rows={materiais.map(m => [rmByCode[m.rawMaterialCode]?.descricao || m.rawMaterialCode, `${fmt(m.percentual, 1)}%`, `${fmt(m.kg, 3)} kg`])}
           />
         </div>
       )}
@@ -1475,7 +1475,7 @@ function ConsolidadoMPTab({ ordersMaquina, ordersGeral, products, productMateria
     kg: acc.kg + r.kg, pecas: acc.pecas + (Number(r.om.qtd_programada) || 0),
   }), { kg: 0, pecas: 0 });
 
-  const aggregatedRows = Object.entries(aggregated).map(([code, kg]) => [rmByCode[code]?.descricao || code, fmt(kg)]);
+  const aggregatedRows = Object.entries(aggregated).map(([code, kg]) => [rmByCode[code]?.descricao || code, fmt(kg, 3)]);
 
   return (
     <div>
@@ -1494,7 +1494,7 @@ function ConsolidadoMPTab({ ordersMaquina, ordersGeral, products, productMateria
       </div>
       <div className="bp-kpi-grid" style={styles.kpiGrid}>
         <Kpi label="Peças programadas" value={fmt(totals.pecas, 0)} />
-        <Kpi label="Kg total" value={fmt(totals.kg)} />
+        <Kpi label="Kg total" value={fmt(totals.kg, 3)} />
       </div>
       <div style={styles.card}>
         <div style={styles.cardTitle}>Necessidade de matéria-prima do dia</div>
@@ -1536,7 +1536,7 @@ function EstoqueVisaoGeral({ rawMaterials, products }) {
         <div style={styles.cardTitle}>Matéria-prima (kg)</div>
         <Table
           columns={['Código', 'Descrição', 'Estoque']}
-          rows={rawMaterials.map(r => [<span style={styles.mono}>{r.code}</span>, r.descricao, fmt(r.estoque, 0)])}
+          rows={rawMaterials.map(r => [<span style={styles.mono}>{r.code}</span>, r.descricao, fmt(r.estoque, 3)])}
         />
       </div>
       <div style={styles.card}>
@@ -1544,7 +1544,7 @@ function EstoqueVisaoGeral({ rawMaterials, products }) {
         <div style={styles.caption}>Material já entregue no chão de fábrica pra uma OP, ainda não consumido em apontamento.</div>
         <Table
           columns={['Código', 'Descrição', 'Em processo']}
-          rows={rawMaterials.map(r => [<span style={styles.mono}>{r.code}</span>, r.descricao, fmt(r.estoque_em_processo, 0)])}
+          rows={rawMaterials.map(r => [<span style={styles.mono}>{r.code}</span>, r.descricao, fmt(r.estoque_em_processo, 3)])}
         />
       </div>
       <div style={styles.card}>
@@ -1751,7 +1751,7 @@ function PerdasOperadoresTab({ apontamentos, products, ordersMaquina, ordersGera
   const rows = Object.entries(byOperador).map(([op, v]) => {
     const boa = v.produzida - v.refugo;
     const pctRefugo = v.produzida ? (v.refugo / v.produzida) * 100 : 0;
-    return [op, fmt(v.produzida, 0), fmt(v.refugo, 0), fmt(boa, 0), `${fmt(pctRefugo, 1)}%`, fmt(v.kg)];
+    return [op, fmt(v.produzida, 0), fmt(v.refugo, 0), fmt(boa, 0), `${fmt(pctRefugo, 1)}%`, fmt(v.kg, 3)];
   });
 
   return (
