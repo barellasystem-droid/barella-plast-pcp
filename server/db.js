@@ -130,6 +130,28 @@ async function init() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_cpf ON users(cpf) WHERE cpf IS NOT NULL;
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(lower(email)) WHERE email IS NOT NULL;
+
+    -- Módulo de estoque: Matéria Prima (raw_materials.estoque, já existia),
+    -- Em Processo e Produto Acabado, mais o carimbo de entrega de material por OP.
+    ALTER TABLE raw_materials ADD COLUMN IF NOT EXISTS estoque_em_processo REAL DEFAULT 0;
+    ALTER TABLE products ADD COLUMN IF NOT EXISTS estoque_pa REAL DEFAULT 0;
+    ALTER TABLE orders_geral ADD COLUMN IF NOT EXISTS entregue_em TIMESTAMPTZ;
+    ALTER TABLE orders_geral ADD COLUMN IF NOT EXISTS entregue_por TEXT;
+
+    CREATE TABLE IF NOT EXISTS stock_movements (
+      id TEXT PRIMARY KEY,
+      tipo TEXT NOT NULL,
+      raw_material_code TEXT,
+      product_code TEXT,
+      quantidade REAL NOT NULL,
+      referencia TEXT,
+      obs TEXT,
+      usuario TEXT,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_stock_movements_rawmat ON stock_movements(raw_material_code);
+    CREATE INDEX IF NOT EXISTS idx_stock_movements_product ON stock_movements(product_code);
+    CREATE INDEX IF NOT EXISTS idx_stock_movements_created ON stock_movements(created_at DESC);
   `);
 }
 

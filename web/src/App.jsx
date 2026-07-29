@@ -422,6 +422,7 @@ function TabRouter(props) {
     case 'apontamento': return <ApontamentoTab {...props} />;
     case 'opImpressao': return <OpImpressaoTab {...props} />;
     case 'consolidadoMP': return <ConsolidadoMPTab {...props} />;
+    case 'estoque': return <EstoqueTab {...props} />;
     case 'comparativoMensal': return <ComparativoMensalTab {...props} />;
     case 'perdasOperadores': return <PerdasOperadoresTab {...props} />;
     case 'usuarios': return <UsuariosTab {...props} />;
@@ -1061,6 +1062,12 @@ function ProgramacaoGeralTab({ ordersGeral, setOrdersGeral, products, productMat
       if (editingId === id) cancelEdit();
     } catch (e) { onError(e.message); }
   }
+  async function confirmarEntrega(id) {
+    try {
+      await api.ordersGeral.entregarMaterial(id);
+      setOrdersGeral(ordersGeral.map(o => o.id === id ? { ...o, entregue_em: new Date().toISOString() } : o));
+    } catch (e) { onError(e.message); }
+  }
 
   const rmByCode = Object.fromEntries(rawMaterials.map(r => [r.code, r]));
   const computed = ordersGeral.map(o => computeOG(o, products, productMaterials));
@@ -1087,11 +1094,16 @@ function ProgramacaoGeralTab({ ordersGeral, setOrdersGeral, products, productMat
       <div style={styles.card}>
         <div style={styles.cardTitle}>Ordens gerais programadas ({computed.length})</div>
         <Table
-          columns={['Nº OP', 'Data', 'Prior.', 'Produto', 'Qtd.', 'Kg necessário', 'Composição (kg)', 'Status', canEdit ? 'Ações' : null].filter(Boolean)}
+          columns={['Nº OP', 'Data', 'Prior.', 'Produto', 'Qtd.', 'Kg necessário', 'Composição (kg)', 'Status', 'Material', canEdit ? 'Ações' : null].filter(Boolean)}
           rows={computed.map(o => [
             <span style={styles.mono}>{o.id}</span>, o.date, o.priority, `${o.product_code} — ${o.product.name || '?'}`,
             fmt(o.qtd_planejada, 0), fmt(o.kgNecessario), <CompositionList materiais={o.materiais} rmByCode={rmByCode} />,
             canEdit ? <select style={{ ...styles.input, padding: '4px 6px' }} value={o.status} onChange={e => updateStatus(o.id, e.target.value)}>{STATUS_OP.map(s => <option key={s}>{s}</option>)}</select> : <StatusBadge status={o.status} />,
+            o.entregue_em ? (
+              <span style={{ ...styles.badge, background: '#4C8C6B22', color: '#4C8C6B' }}>Entregue em {new Date(o.entregue_em).toLocaleDateString('pt-BR')}</span>
+            ) : (
+              canEdit ? <button style={styles.secondaryBtn} onClick={() => confirmarEntrega(o.id)}>Confirmar entrega</button> : <span style={styles.caption}>Pendente</span>
+            ),
             canEdit ? (
               <div style={{ display: 'flex', gap: 6 }}>
                 <button style={styles.iconBtn} onClick={() => startEdit(o)}><Pencil size={13} /></button>
@@ -1485,6 +1497,190 @@ function ConsolidadoMPTab({ ordersMaquina, ordersGeral, products, productMateria
         <div style={styles.cardTitle}>OPs do dia ({rows.length})</div>
         <Table columns={['OP Máquina', 'Injetora', 'Produto', 'Qtd.', 'Composição (kg)']} rows={rows.map(r => [r.om.id, r.om.injetora, r.p.name || '—', fmt(r.om.qtd_programada, 0), <CompositionList materiais={r.materiais} rmByCode={rmByCode} />])} />
       </div>
+    </div>
+  );
+}
+
+/* ============================== ESTOQUE ============================== */
+
+function EstoqueTab({ rawMaterials, setRawMaterials, products, canEdit, onError }) {
+  const [mode, setMode] = useState('visao'); // 'visao' | 'entrada' | 'historico'
+
+  return (
+    <div>
+      <div style={styles.card}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button type="button" style={mode === 'visao' ? styles.primaryBtn : styles.secondaryBtn} onClick={() => setMode('visao')}>Visão geral</button>
+          {canEdit && <button type="button" style={mode === 'entrada' ? styles.primaryBtn : styles.secondaryBtn} onClick={() => setMode('entrada')}>Entrada de nota fiscal</button>}
+          <button type="button" style={mode === 'historico' ? styles.primaryBtn : styles.secondaryBtn} onClick={() => setMode('historico')}>Histórico</button>
+        </div>
+      </div>
+      {mode === 'visao' && <EstoqueVisaoGeral rawMaterials={rawMaterials} products={products} />}
+      {mode === 'entrada' && canEdit && <EstoqueEntradaNF rawMaterials={rawMaterials} setRawMaterials={setRawMaterials} onError={onError} />}
+      {mode === 'historico' && <EstoqueHistorico onError={onError} />}
+    </div>
+  );
+}
+
+function EstoqueVisaoGeral({ rawMaterials, products }) {
+  return (
+    <div>
+      <div style={styles.card}>
+        <div style={styles.cardTitle}>Matéria-prima (kg)</div>
+        <Table
+          columns={['Código', 'Descrição', 'Estoque']}
+          rows={rawMaterials.map(r => [<span style={styles.mono}>{r.code}</span>, r.descricao, fmt(r.estoque, 0)])}
+        />
+      </div>
+      <div style={styles.card}>
+        <div style={styles.cardTitle}>Em processo (kg)</div>
+        <div style={styles.caption}>Material já entregue no chão de fábrica pra uma OP, ainda não consumido em apontamento.</div>
+        <Table
+          columns={['Código', 'Descrição', 'Em processo']}
+          rows={rawMaterials.map(r => [<span style={styles.mono}>{r.code}</span>, r.descricao, fmt(r.estoque_em_processo, 0)])}
+        />
+      </div>
+      <div style={styles.card}>
+        <div style={styles.cardTitle}>Produto acabado (peças)</div>
+        <Table
+          columns={['Código', 'Produto', 'Estoque']}
+          rows={products.map(p => [<span style={styles.mono}>{p.code}</span>, p.name, fmt(p.estoque_pa, 0)])}
+        />
+      </div>
+    </div>
+  );
+}
+
+function EstoqueEntradaNF({ rawMaterials, setRawMaterials, onError }) {
+  const [xmlMode, setXmlMode] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState(null);
+  const [manual, setManual] = useState({ rawMaterialCode: rawMaterials[0]?.code || '', quantidade: '', referencia: '', obs: '' });
+
+  async function refreshRawMaterials() {
+    const list = await api.rawMaterials.list();
+    setRawMaterials(list);
+  }
+
+  async function handleFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setBusy(true);
+    try {
+      const text = await file.text();
+      const data = await api.stock.nfeParse(text);
+      setPreview({ ...data, itens: data.itens.map(i => ({ ...i, quantidade: i.qCom })) });
+    } catch (err) { onError(err.message); }
+    setBusy(false);
+  }
+
+  function updateItem(idx, field, value) {
+    setPreview(p => ({ ...p, itens: p.itens.map((it, i) => (i === idx ? { ...it, [field]: value } : it)) }));
+  }
+
+  async function confirmarNF() {
+    setBusy(true);
+    try {
+      const itens = preview.itens.map(i => ({ rawMaterialCode: i.rawMaterialCode, quantidade: i.quantidade, xProd: i.xProd }));
+      await api.stock.nfeConfirmar({ referencia: preview.nNF, itens });
+      setPreview(null);
+      await refreshRawMaterials();
+    } catch (err) { onError(err.message); }
+    setBusy(false);
+  }
+
+  async function submitManual(e) {
+    e.preventDefault();
+    if (!manual.rawMaterialCode || !manual.quantidade) return;
+    setBusy(true);
+    try {
+      await api.stock.entradaManual(manual);
+      setManual({ ...manual, quantidade: '', referencia: '', obs: '' });
+      await refreshRawMaterials();
+    } catch (err) { onError(err.message); }
+    setBusy(false);
+  }
+
+  return (
+    <div style={styles.card}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+        <button type="button" style={xmlMode ? styles.primaryBtn : styles.secondaryBtn} onClick={() => setXmlMode(true)}>Por XML da nota</button>
+        <button type="button" style={!xmlMode ? styles.primaryBtn : styles.secondaryBtn} onClick={() => setXmlMode(false)}>Lançar manualmente</button>
+      </div>
+
+      {xmlMode ? (
+        <div>
+          <label style={styles.label}>Arquivo XML da nota fiscal</label>
+          <input type="file" accept=".xml,text/xml" onChange={handleFile} disabled={busy} />
+          {preview && (
+            <div style={{ marginTop: 16 }}>
+              <div style={styles.subTitle}>NF {preview.nNF || '?'} — {preview.emitente || 'emitente não identificado'}</div>
+              <Table
+                columns={['Cód. na NF', 'Descrição na NF', 'Quantidade', 'Un.', 'Matéria-prima vinculada']}
+                rows={preview.itens.map((it, idx) => [
+                  it.cProd || '—', it.xProd || '—',
+                  <input type="number" step="0.01" style={{ ...styles.input, width: 100 }} value={it.quantidade} onChange={e => updateItem(idx, 'quantidade', e.target.value)} />,
+                  it.uCom || '—',
+                  <select style={styles.input} value={it.rawMaterialCode || ''} onChange={e => updateItem(idx, 'rawMaterialCode', e.target.value || null)}>
+                    <option value="">— não vinculado —</option>
+                    {rawMaterials.map(r => <option key={r.code} value={r.code}>{r.code} — {r.descricao}</option>)}
+                  </select>,
+                ])}
+              />
+              <div style={{ ...styles.caption, marginTop: 8 }}>Itens sem matéria-prima vinculada não entram no estoque ao confirmar — cadastre a matéria-prima em Matérias-Primas se precisar, depois refaça o upload.</div>
+              <button type="button" style={{ ...styles.primaryBtn, marginTop: 12 }} disabled={busy} onClick={confirmarNF}><Save size={14} /> Confirmar entrada</button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <form onSubmit={submitManual} className="bp-form-grid" style={styles.formGrid}>
+          <Field label="Matéria-prima">
+            <select style={styles.input} value={manual.rawMaterialCode} onChange={e => setManual({ ...manual, rawMaterialCode: e.target.value })}>
+              {rawMaterials.map(r => <option key={r.code} value={r.code}>{r.code} — {r.descricao}</option>)}
+            </select>
+          </Field>
+          <Field label="Quantidade (kg)"><input type="number" step="0.01" style={styles.input} value={manual.quantidade} onChange={e => setManual({ ...manual, quantidade: e.target.value })} /></Field>
+          <Field label="Referência (nº da nota)"><input style={styles.input} value={manual.referencia} onChange={e => setManual({ ...manual, referencia: e.target.value })} /></Field>
+          <Field label="Observação" wide><input style={styles.input} value={manual.obs} onChange={e => setManual({ ...manual, obs: e.target.value })} /></Field>
+          <div style={{ display: 'flex', alignItems: 'flex-end' }}><button type="submit" style={styles.primaryBtn} disabled={busy}><Plus size={14} /> Lançar entrada</button></div>
+        </form>
+      )}
+    </div>
+  );
+}
+
+const STOCK_MOVEMENT_LABELS = {
+  entrada_mp: 'Entrada Matéria-Prima',
+  ajuste_mp: 'Ajuste manual MP',
+  transferencia_processo: 'MP → Em Processo',
+  consumo_processo: 'Consumo em Processo',
+  entrada_pa: 'Entrada Produto Acabado',
+};
+
+function EstoqueHistorico({ onError }) {
+  const [rows, setRows] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    api.stock.movements().then(setRows).catch(e => onError(e.message)).finally(() => setLoaded(true));
+    // eslint-disable-next-line
+  }, []);
+
+  return (
+    <div style={styles.card}>
+      <div style={styles.cardTitle}>Movimentações de estoque</div>
+      {!loaded ? <div style={styles.emptyState}>Carregando…</div> : (
+        <Table
+          columns={['Data', 'Tipo', 'Item', 'Quantidade', 'Referência', 'Usuário']}
+          rows={rows.map(m => [
+            new Date(m.created_at).toLocaleString('pt-BR'),
+            STOCK_MOVEMENT_LABELS[m.tipo] || m.tipo,
+            m.raw_material_code || m.product_code || '—',
+            fmt(m.quantidade), m.referencia || '—', m.usuario || '—',
+          ])}
+        />
+      )}
     </div>
   );
 }

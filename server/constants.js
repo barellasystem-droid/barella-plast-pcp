@@ -12,7 +12,7 @@ const ROLE_LABELS = {
 
 const TABS = [
   'dashboard', 'cadastros', 'materiasPrimas', 'operadores', 'injetoras', 'programacaoGeral',
-  'distribuicaoInjetoras', 'apontamento', 'opImpressao', 'consolidadoMP',
+  'distribuicaoInjetoras', 'apontamento', 'opImpressao', 'consolidadoMP', 'estoque',
   'comparativoMensal', 'perdasOperadores', 'usuarios', 'permissoes',
 ];
 
@@ -28,6 +28,7 @@ const DEFAULT_PERMISSIONS = {
   apontamento: { view: ['admin', 'pcp', 'operador', 'qualidade', 'gerencia'], edit: ['admin', 'pcp', 'operador'] },
   opImpressao: { view: ['admin', 'pcp', 'operador', 'almoxarifado', 'qualidade', 'gerencia'], edit: ['admin', 'pcp', 'qualidade'] },
   consolidadoMP: { view: ['admin', 'pcp', 'almoxarifado', 'gerencia'], edit: ['admin', 'pcp', 'almoxarifado'] },
+  estoque: { view: ['admin', 'pcp', 'almoxarifado', 'gerencia'], edit: ['admin', 'pcp', 'almoxarifado'] },
   comparativoMensal: { view: ['admin', 'pcp', 'gerencia'], edit: [] },
   perdasOperadores: { view: ['admin', 'pcp', 'gerencia'], edit: [] },
   usuarios: { view: ['admin'], edit: ['admin'] },

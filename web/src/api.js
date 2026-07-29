@@ -73,6 +73,7 @@ export const api = {
     create: (o) => request('POST', '/orders-geral', o),
     update: (id, o) => request('PUT', `/orders-geral/${id}`, o),
     setStatus: (id, status) => request('PATCH', `/orders-geral/${id}/status`, { status }),
+    entregarMaterial: (id) => request('PATCH', `/orders-geral/${id}/entregar-material`),
     remove: (id) => request('DELETE', `/orders-geral/${id}`),
   },
   ordersMaquina: {
@@ -85,5 +86,11 @@ export const api = {
     list: () => request('GET', '/apontamentos'),
     create: (a) => request('POST', '/apontamentos', a),
     remove: (id) => request('DELETE', `/apontamentos/${id}`),
+  },
+  stock: {
+    movements: (params) => request('GET', `/stock/movements${params ? '?' + new URLSearchParams(params).toString() : ''}`),
+    entradaManual: (data) => request('POST', '/stock/entrada-manual', data),
+    nfeParse: (xml) => request('POST', '/stock/nfe/parse', { xml }),
+    nfeConfirmar: (data) => request('POST', '/stock/nfe/confirmar', data),
   },
 };

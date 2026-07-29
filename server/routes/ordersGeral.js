@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const db = require('../db');
 const { requireAuth, requireView, requireEdit, blockPending } = require('../auth');
 
@@ -41,6 +42,60 @@ router.put('/:id', requireAuth, requireEdit(TAB), async (req, res) => {
     `UPDATE orders_geral SET date=$1, priority=$2, product_code=$3, qtd_planejada=$4, prazo=$5, obs=$6 WHERE id=$7`,
     [o.date || '', o.priority || 'Média', o.productCode, Number(o.qtdPlanejada) || 0, o.prazo || '', o.obs || '', req.params.id]
   );
+  res.json({ ok: true });
+});
+
+// Almoxarifado confirma que já entregou o material dessa OP no chão de
+// fábrica: tira de Matéria Prima, põe em Em Processo (por matéria-prima,
+// seguindo a composição do produto). Bloqueia se já tiver sido confirmado
+// antes, e bloqueia (com erro claro) se faltar estoque de alguma matéria-prima.
+router.patch('/:id/entregar-material', requireAuth, requireEdit(TAB), async (req, res) => {
+  const { rows: ogRows } = await db.query('SELECT * FROM orders_geral WHERE id = $1', [req.params.id]);
+  const og = ogRows[0];
+  if (!og) return res.status(404).json({ error: 'OP Geral não encontrada.' });
+  if (og.entregue_em) return res.status(409).json({ error: 'O material dessa OP já foi confirmado como entregue.' });
+
+  const { rows: prodRows } = await db.query('SELECT peso FROM products WHERE code = $1', [og.product_code]);
+  const peso = Number(prodRows[0]?.peso) || 0;
+  const { rows: compRows } = await db.query('SELECT raw_material_code, percentual FROM product_materials WHERE product_code = $1', [og.product_code]);
+  if (!compRows.length) return res.status(400).json({ error: 'Esse produto não tem composição de matéria-prima cadastrada.' });
+
+  const kgTotal = (Number(og.qtd_planejada) || 0) * peso / 1000;
+  const itens = compRows
+    .map(c => ({ rawMaterialCode: c.raw_material_code, kg: kgTotal * (Number(c.percentual) || 0) / 100 }))
+    .filter(i => i.kg > 0);
+  if (!itens.length) return res.status(400).json({ error: 'Kg necessário calculado é zero — confira o peso do produto e a quantidade planejada.' });
+
+  try {
+    await db.withTransaction(async (client) => {
+      for (const item of itens) {
+        const { rows } = await client.query('SELECT estoque FROM raw_materials WHERE code = $1 FOR UPDATE', [item.rawMaterialCode]);
+        const disponivel = rows[0] ? Number(rows[0].estoque) || 0 : 0;
+        if (disponivel < item.kg) {
+          throw Object.assign(
+            new Error(`Estoque insuficiente de "${item.rawMaterialCode}": disponível ${disponivel.toFixed(2)} kg, necessário ${item.kg.toFixed(2)} kg.`),
+            { status: 409 }
+          );
+        }
+      }
+      for (const item of itens) {
+        await client.query(
+          'UPDATE raw_materials SET estoque = estoque - $1, estoque_em_processo = estoque_em_processo + $1 WHERE code = $2',
+          [item.kg, item.rawMaterialCode]
+        );
+        await client.query(
+          `INSERT INTO stock_movements (id, tipo, raw_material_code, quantidade, referencia, usuario)
+           VALUES ($1, 'transferencia_processo', $2, $3, $4, $5)`,
+          [crypto.randomUUID(), item.rawMaterialCode, item.kg, og.id, req.user.username]
+        );
+      }
+      await client.query('UPDATE orders_geral SET entregue_em = now(), entregue_por = $1 WHERE id = $2', [req.user.username, og.id]);
+    });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    throw err;
+  }
+
   res.json({ ok: true });
 });
 
