@@ -649,6 +649,11 @@ function CadastrosTab({ products, setProducts, rawMaterials, productMaterials, r
   function emptyProduct() { return { code: '', name: '', molde: '', maquina: activeInjetoras[0]?.nome || '', prodDia: '', peso: '', cavidades: '', materials: [{ rawMaterialCode: '', percentual: '' }] }; }
   const [form, setForm] = useState(emptyProduct());
   const [editingCode, setEditingCode] = useState(null);
+  // form.peso fica sempre gravado em gramas por baixo dos panos (é o que a
+  // fórmula de kg necessário em todo o sistema espera) — esse seletor só
+  // muda a unidade mostrada/digitada no campo, pra evitar erro de casa
+  // decimal em peças cujo peso é mais natural em quilos.
+  const [pesoUnidade, setPesoUnidade] = useState('g');
 
   function updateMaterial(idx, field, value) {
     setForm({ ...form, materials: form.materials.map((m, i) => i === idx ? { ...m, [field]: value } : m) });
@@ -665,8 +670,9 @@ function CadastrosTab({ products, setProducts, rawMaterials, productMaterials, r
       materials: mats.length ? mats : [{ rawMaterialCode: '', percentual: '' }],
     });
     setEditingCode(p.code);
+    setPesoUnidade('g');
   }
-  function cancelEdit() { setForm(emptyProduct()); setEditingCode(null); }
+  function cancelEdit() { setForm(emptyProduct()); setEditingCode(null); setPesoUnidade('g'); }
 
   async function submit(e) {
     e.preventDefault();
@@ -685,6 +691,7 @@ function CadastrosTab({ products, setProducts, rawMaterials, productMaterials, r
       await reloadProductMaterials();
       setForm(emptyProduct());
       setEditingCode(null);
+      setPesoUnidade('g');
     } catch (e) { onError(e.message); }
   }
   async function remove(code) {
@@ -713,7 +720,22 @@ function CadastrosTab({ products, setProducts, rawMaterials, productMaterials, r
                 <select style={styles.input} value={form.maquina} onChange={e => setForm({ ...form, maquina: e.target.value })}>{selectableNames(injetoras, 'ativa', form.maquina).map(i => <option key={i}>{i}</option>)}</select>
               </Field>
               <Field label="Produção/dia (peças)"><input type="number" style={styles.input} value={form.prodDia} onChange={e => setForm({ ...form, prodDia: e.target.value })} /></Field>
-              <Field label="Peso peça (g)"><input type="number" step="0.01" style={styles.input} value={form.peso} onChange={e => setForm({ ...form, peso: e.target.value })} /></Field>
+              <Field label="Peso peça">
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input
+                    type="number" step="0.001" style={styles.input}
+                    value={form.peso === '' ? '' : (pesoUnidade === 'kg' ? Number(form.peso) / 1000 : form.peso)}
+                    onChange={e => {
+                      const v = e.target.value;
+                      setForm({ ...form, peso: v === '' ? '' : (pesoUnidade === 'kg' ? Number(v) * 1000 : v) });
+                    }}
+                  />
+                  <select style={{ ...styles.input, width: 68, flex: 'none' }} value={pesoUnidade} onChange={e => setPesoUnidade(e.target.value)}>
+                    <option value="g">g</option>
+                    <option value="kg">kg</option>
+                  </select>
+                </div>
+              </Field>
               <Field label="Cavidades"><input type="number" style={styles.input} value={form.cavidades} onChange={e => setForm({ ...form, cavidades: e.target.value })} /></Field>
             </div>
 
