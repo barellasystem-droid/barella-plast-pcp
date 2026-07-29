@@ -1044,7 +1044,7 @@ function CompositionList({ materiais, rmByCode }) {
 
 function computeOG(og, products, productMaterials) {
   const p = products.find(x => x.code === og.product_code) || {};
-  const kgNecessario = (Number(og.qtd_planejada) || 0) * (Number(p.peso) || 0) * (Number(p.cavidades) || 1) / 1000;
+  const kgNecessario = (Number(og.qtd_planejada) || 0) * (Number(p.peso) || 0) / 1000;
   return { ...og, product: p, kgNecessario, materiais: materialBreakdown(og.product_code, kgNecessario, productMaterials) };
 }
 
@@ -1196,7 +1196,7 @@ function DistribuicaoTab({ ordersGeral, ordersMaquina, setOrdersMaquina, product
   function computeOM(om) {
     const og = ordersGeral.find(o => o.id === om.op_geral_id) || {};
     const p = products.find(x => x.code === og.product_code) || {};
-    const kgProgramado = (Number(om.qtd_programada) || 0) * (Number(p.peso) || 0) * (Number(p.cavidades) || 1) / 1000;
+    const kgProgramado = (Number(om.qtd_programada) || 0) * (Number(p.peso) || 0) / 1000;
     return { ...om, og, product: p, kgProgramado, materiais: materialBreakdown(og.product_code, kgProgramado, productMaterials) };
   }
   const rmByCode = Object.fromEntries(rawMaterials.map(r => [r.code, r]));
@@ -1298,7 +1298,7 @@ function ApontamentoTab({ ordersMaquina, ordersGeral, products, operators, apont
     const p = products.find(x => x.code === og.product_code) || {};
     const qtdBoa = (Number(ap.qtd_produzida) || 0) - (Number(ap.refugo) || 0);
     const atingimento = om.qtd_programada ? (qtdBoa / Number(om.qtd_programada)) * 100 : 0;
-    const kgConsumido = (Number(ap.qtd_produzida) || 0) * (Number(p.peso) || 0) * (Number(p.cavidades) || 1) / 1000;
+    const kgConsumido = (Number(ap.qtd_produzida) || 0) * (Number(p.peso) || 0) / 1000;
     return { ...ap, qtdBoa, atingimento, kgConsumido };
   }
   const computed = apontamentos.map(computeAP);
@@ -1380,7 +1380,7 @@ function OpGeralImpressao({ ordersGeral, products, productMaterials, rmByCode })
   const [selected, setSelected] = useState('');
   const og = ordersGeral.find(o => o.id === selected);
   const p = og ? products.find(x => x.code === og.product_code) : null;
-  const kgNecessario = og ? (Number(og.qtd_planejada) || 0) * (Number(p?.peso) || 0) * (Number(p?.cavidades) || 1) / 1000 : 0;
+  const kgNecessario = og ? (Number(og.qtd_planejada) || 0) * (Number(p?.peso) || 0) / 1000 : 0;
   const materiais = og ? materialBreakdown(og.product_code, kgNecessario, productMaterials) : [];
 
   return (
@@ -1487,7 +1487,7 @@ function ConsolidadoMPTab({ ordersMaquina, ordersGeral, products, productMateria
   const rows = filtered.map(om => {
     const og = ordersGeral.find(o => o.id === om.op_geral_id) || {};
     const p = products.find(x => x.code === og.product_code) || {};
-    const kg = (Number(om.qtd_programada) || 0) * (Number(p.peso) || 0) * (Number(p.cavidades) || 1) / 1000;
+    const kg = (Number(om.qtd_programada) || 0) * (Number(p.peso) || 0) / 1000;
     const materiais = materialBreakdown(og.product_code, kg, productMaterials);
     materiais.forEach(m => { aggregated[m.rawMaterialCode] = (aggregated[m.rawMaterialCode] || 0) + m.kg; });
     return { om, p, kg, materiais };
@@ -1767,7 +1767,7 @@ function PerdasOperadoresTab({ apontamentos, products, ordersMaquina, ordersGera
     const p = og ? products.find(x => x.code === og.product_code) : null;
     byOperador[key].produzida += Number(a.qtd_produzida || 0);
     byOperador[key].refugo += Number(a.refugo || 0);
-    byOperador[key].kg += (Number(a.qtd_produzida) || 0) * (Number(p?.peso) || 0) * (Number(p?.cavidades) || 1) / 1000;
+    byOperador[key].kg += (Number(a.qtd_produzida) || 0) * (Number(p?.peso) || 0) / 1000;
   });
 
   const rows = Object.entries(byOperador).map(([op, v]) => {

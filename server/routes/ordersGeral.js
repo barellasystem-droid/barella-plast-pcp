@@ -55,13 +55,12 @@ router.patch('/:id/entregar-material', requireAuth, requireEdit(TAB), async (req
   if (!og) return res.status(404).json({ error: 'OP Geral não encontrada.' });
   if (og.entregue_em) return res.status(409).json({ error: 'O material dessa OP já foi confirmado como entregue.' });
 
-  const { rows: prodRows } = await db.query('SELECT peso, cavidades FROM products WHERE code = $1', [og.product_code]);
+  const { rows: prodRows } = await db.query('SELECT peso FROM products WHERE code = $1', [og.product_code]);
   const peso = Number(prodRows[0]?.peso) || 0;
-  const cavidades = Number(prodRows[0]?.cavidades) || 1;
   const { rows: compRows } = await db.query('SELECT raw_material_code, percentual FROM product_materials WHERE product_code = $1', [og.product_code]);
   if (!compRows.length) return res.status(400).json({ error: 'Esse produto não tem composição de matéria-prima cadastrada.' });
 
-  const kgTotal = (Number(og.qtd_planejada) || 0) * peso * cavidades / 1000;
+  const kgTotal = (Number(og.qtd_planejada) || 0) * peso / 1000;
   const itens = compRows
     .map(c => ({ rawMaterialCode: c.raw_material_code, kg: kgTotal * (Number(c.percentual) || 0) / 100 }))
     .filter(i => i.kg > 0);
