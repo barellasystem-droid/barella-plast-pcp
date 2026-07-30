@@ -74,6 +74,7 @@ export const api = {
     update: (id, o) => request('PUT', `/orders-geral/${id}`, o),
     setStatus: (id, status) => request('PATCH', `/orders-geral/${id}/status`, { status }),
     entregarMaterial: (id) => request('PATCH', `/orders-geral/${id}/entregar-material`),
+    desmarcarEntrega: (id) => request('PATCH', `/orders-geral/${id}/desmarcar-entrega`),
     remove: (id) => request('DELETE', `/orders-geral/${id}`),
   },
   ordersMaquina: {

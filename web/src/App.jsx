@@ -644,9 +644,10 @@ function Kpi({ label, value, accent }) {
 
 /* ============================== CADASTROS ============================== */
 
-function CadastrosTab({ products, setProducts, rawMaterials, productMaterials, reloadProductMaterials, injetoras, canEdit, onError }) {
-  const activeInjetoras = injetoras.filter(i => i.ativa);
-  function emptyProduct() { return { code: '', name: '', molde: '', maquina: activeInjetoras[0]?.nome || '', prodDia: '', peso: '', cavidades: '', materials: [{ rawMaterialCode: '', percentual: '' }] }; }
+function CadastrosTab({ products, setProducts, rawMaterials, productMaterials, reloadProductMaterials, canEdit, onError }) {
+  // A injetora não é mais escolhida aqui — o vínculo produto↔injetora acontece
+  // na aba Distribuição Injetoras, na hora de gerar a OP de máquina.
+  function emptyProduct() { return { code: '', name: '', molde: '', maquina: '', prodDia: '', peso: '', cavidades: '', materials: [{ rawMaterialCode: '', percentual: '' }] }; }
   const [form, setForm] = useState(emptyProduct());
   const [editingCode, setEditingCode] = useState(null);
   // form.peso fica sempre gravado em gramas por baixo dos panos (é o que a
@@ -716,9 +717,6 @@ function CadastrosTab({ products, setProducts, rawMaterials, productMaterials, r
               <Field label="Código"><input style={styles.input} value={form.code} disabled={!!editingCode} onChange={e => setForm({ ...form, code: e.target.value })} /></Field>
               <Field label="Produto" wide><input style={styles.input} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></Field>
               <Field label="Molde"><input style={styles.input} value={form.molde} onChange={e => setForm({ ...form, molde: e.target.value })} /></Field>
-              <Field label="Máquina padrão">
-                <select style={styles.input} value={form.maquina} onChange={e => setForm({ ...form, maquina: e.target.value })}>{selectableNames(injetoras, 'ativa', form.maquina).map(i => <option key={i}>{i}</option>)}</select>
-              </Field>
               <Field label="Produção/dia (peças)"><input type="number" style={styles.input} value={form.prodDia} onChange={e => setForm({ ...form, prodDia: e.target.value })} /></Field>
               <Field label="Peso peça">
                 <div style={{ display: 'flex', gap: 6 }}>
@@ -774,14 +772,14 @@ function CadastrosTab({ products, setProducts, rawMaterials, productMaterials, r
       <div style={styles.card}>
         <div style={styles.cardTitle}>Produtos cadastrados ({products.length})</div>
         <Table
-          columns={['Código', 'Produto', 'Molde', 'Máquina', 'Peso (g)', 'Composição', 'Cavidades', canEdit ? 'Ações' : null].filter(Boolean)}
+          columns={['Código', 'Produto', 'Molde', 'Peso (g)', 'Composição', 'Cavidades', canEdit ? 'Ações' : null].filter(Boolean)}
           rows={products.map(p => {
             const mats = productMaterials.filter(m => m.product_code === p.code);
             const compStr = mats.length
               ? mats.map(m => `${rmByCode[m.raw_material_code]?.descricao || m.raw_material_code} ${fmt(m.percentual, 1)}% (${fmt((Number(p.peso) || 0) * (Number(m.percentual) || 0) / 100)} g)`).join(' · ')
               : '—';
             return [
-              <span style={styles.mono}>{p.code}</span>, p.name, p.molde, p.maquina, fmt(p.peso), compStr, p.cavidades,
+              <span style={styles.mono}>{p.code}</span>, p.name, p.molde, fmt(p.peso), compStr, p.cavidades,
               canEdit ? (
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button style={styles.iconBtn} onClick={() => startEdit(p)}><Pencil size={13} /></button>
@@ -1097,6 +1095,12 @@ function ProgramacaoGeralTab({ ordersGeral, setOrdersGeral, products, productMat
       setOrdersGeral(ordersGeral.map(o => o.id === id ? { ...o, entregue_em: new Date().toISOString() } : o));
     } catch (e) { onError(e.message); }
   }
+  async function desmarcarEntrega(id) {
+    try {
+      await api.ordersGeral.desmarcarEntrega(id);
+      setOrdersGeral(ordersGeral.map(o => o.id === id ? { ...o, entregue_em: null, entregue_por: null } : o));
+    } catch (e) { onError(e.message); }
+  }
 
   const rmByCode = Object.fromEntries(rawMaterials.map(r => [r.code, r]));
   const computed = ordersGeral.map(o => computeOG(o, products, productMaterials));
@@ -1129,9 +1133,14 @@ function ProgramacaoGeralTab({ ordersGeral, setOrdersGeral, products, productMat
             fmt(o.qtd_planejada, 0), fmt(o.kgNecessario, 3), <CompositionList materiais={o.materiais} rmByCode={rmByCode} />,
             canEdit ? <select style={{ ...styles.input, padding: '4px 6px' }} value={o.status} onChange={e => updateStatus(o.id, e.target.value)}>{STATUS_OP.map(s => <option key={s}>{s}</option>)}</select> : <StatusBadge status={o.status} />,
             o.entregue_em ? (
-              <span style={{ ...styles.badge, background: '#4C8C6B22', color: '#4C8C6B' }}>Entregue em {new Date(o.entregue_em).toLocaleDateString('pt-BR')}</span>
-            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span style={{ ...styles.badge, background: '#4C8C6B22', color: '#4C8C6B' }}>Entregue em {new Date(o.entregue_em).toLocaleDateString('pt-BR')}</span>
+                {canEdit && <button style={styles.secondaryBtn} onClick={() => desmarcarEntrega(o.id)}>Desmarcar</button>}
+              </div>
+            ) : o.status === 'Liberada' ? (
               canEdit ? <button style={styles.secondaryBtn} onClick={() => confirmarEntrega(o.id)}>Confirmar entrega</button> : <span style={styles.caption}>Pendente</span>
+            ) : (
+              <span style={styles.caption}>—</span>
             ),
             canEdit ? (
               <div style={{ display: 'flex', gap: 6 }}>

@@ -99,6 +99,34 @@ router.patch('/:id/entregar-material', requireAuth, requireEdit(TAB), async (req
   res.json({ ok: true });
 });
 
+// Desfaz a confirmação de entrega: devolve o material transferido de volta
+// pra Matéria Prima e libera o botão "Confirmar entrega" de novo. Não mexe
+// em nenhum apontamento que já tenha sido lançado depois — se isso deixar o
+// "Em Processo" negativo, é um sinal real de descompasso, não escondo.
+router.patch('/:id/desmarcar-entrega', requireAuth, requireEdit(TAB), async (req, res) => {
+  const { rows: ogRows } = await db.query('SELECT * FROM orders_geral WHERE id = $1', [req.params.id]);
+  const og = ogRows[0];
+  if (!og) return res.status(404).json({ error: 'OP Geral não encontrada.' });
+  if (!og.entregue_em) return res.status(409).json({ error: 'Essa OP ainda não teve material entregue.' });
+
+  await db.withTransaction(async (client) => {
+    const { rows: movs } = await client.query(
+      `SELECT * FROM stock_movements WHERE referencia = $1 AND tipo = 'transferencia_processo'`,
+      [og.id]
+    );
+    for (const m of movs) {
+      await client.query(
+        'UPDATE raw_materials SET estoque = estoque + $1, estoque_em_processo = estoque_em_processo - $1 WHERE code = $2',
+        [m.quantidade, m.raw_material_code]
+      );
+    }
+    await client.query(`DELETE FROM stock_movements WHERE referencia = $1 AND tipo = 'transferencia_processo'`, [og.id]);
+    await client.query('UPDATE orders_geral SET entregue_em = NULL, entregue_por = NULL WHERE id = $1', [og.id]);
+  });
+
+  res.json({ ok: true });
+});
+
 router.delete('/:id', requireAuth, requireEdit(TAB), async (req, res) => {
   await db.query('DELETE FROM orders_geral WHERE id = $1', [req.params.id]);
   res.json({ ok: true });
