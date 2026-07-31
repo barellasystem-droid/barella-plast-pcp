@@ -1994,8 +1994,11 @@ function GlobalStyle() {
 
       @media print {
         .bp-sidebar, .bp-sidebar-backdrop, .bp-menu-btn, header, .no-print { display: none !important; }
-        .bp-content { padding: 0; font-size: 12pt; }
-        body, .bp-content, .bp-content * { font-size: 12pt; }
+        .bp-content { padding: 0; }
+        /* !important pra vencer os estilos inline (React) de cada elemento —
+           sem isso, cada componente mantém seu próprio tamanho de fonte
+           mesmo dentro do media print. */
+        .bp-content, .bp-content * { font-size: 12pt !important; line-height: 1.4 !important; }
       }
     `}</style>
   );
