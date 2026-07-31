@@ -1524,7 +1524,7 @@ function ConsolidadoMPTab({ ordersMaquina, ordersGeral, products, productMateria
 
   return (
     <div>
-      <div style={styles.card}>
+      <div className="no-print" style={styles.card}>
         <div style={styles.printHeader}>
           <div>
             <div style={styles.cardTitle}>Separação de matéria-prima do dia</div>
@@ -1990,6 +1990,12 @@ function GlobalStyle() {
         .bp-grid-2 { grid-template-columns: 1fr; }
         .bp-grid-3 { grid-template-columns: 1fr; }
         .bp-login-card { width: 100%; padding: 20px; }
+      }
+
+      @media print {
+        .bp-sidebar, .bp-sidebar-backdrop, .bp-menu-btn, header, .no-print { display: none !important; }
+        .bp-content { padding: 0; font-size: 12pt; }
+        body, .bp-content, .bp-content * { font-size: 12pt; }
       }
     `}</style>
   );
