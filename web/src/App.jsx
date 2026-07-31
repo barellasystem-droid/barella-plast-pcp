@@ -154,7 +154,7 @@ export default function App() {
   const editAllowed = activeMeta && myPermissions[activeTab]?.edit;
 
   return (
-    <div style={styles.appWrap}>
+    <div className="bp-app-wrap" style={styles.appWrap}>
       <GlobalStyle />
 
       <div className={`bp-sidebar-backdrop${sidebarOpen ? ' show' : ''}`} onClick={() => setSidebarOpen(false)} />
@@ -1994,11 +1994,19 @@ function GlobalStyle() {
 
       @media print {
         .bp-sidebar, .bp-sidebar-backdrop, .bp-menu-btn, header, .no-print { display: none !important; }
-        .bp-content { padding: 0; }
-        /* !important pra vencer os estilos inline (React) de cada elemento —
-           sem isso, cada componente mantém seu próprio tamanho de fonte
-           mesmo dentro do media print. */
-        .bp-content, .bp-content * { font-size: 12pt !important; line-height: 1.4 !important; }
+
+        /* O layout normal usa altura fixa (100vh) com rolagem interna no
+           conteúdo — ótimo pra tela, mas na impressão isso "prende" tudo numa
+           página só, cortando o resto em vez de fluir pras próximas folhas. */
+        html, body { height: auto !important; }
+        .bp-app-wrap { height: auto !important; }
+        .bp-content { overflow: visible !important; height: auto !important; padding: 0 !important; }
+
+        /* !important pra vencer os estilos inline (React) de cada elemento.
+           Fonte compacta (bem menor que os ~13px/~9,75pt que a tabela já usava
+           na tela) pra caber as ~30 injetoras em até 2 páginas impressas. */
+        .bp-content, .bp-content * { font-size: 9pt !important; line-height: 1.3 !important; }
+        .bp-content table th, .bp-content table td { padding: 3px 6px !important; }
       }
     `}</style>
   );
