@@ -1166,6 +1166,14 @@ function DistribuicaoTab({ ordersGeral, ordersMaquina, setOrdersMaquina, product
   const [form, setForm] = useState(emptyForm());
   const [editingId, setEditingId] = useState(null);
   const activeOGs = ordersGeral.filter(o => o.status !== 'Cancelada' && o.status !== 'Concluída');
+  // Some vez que uma OP Geral já foi distribuída (tem OP de máquina vinculada),
+  // some da lista de seleção — e filtra pela data escolhida no formulário. A OG
+  // que já está sendo editada nunca some da própria lista, senão o select fica
+  // sem opção pra ela.
+  const distributedOgIds = new Set(ordersMaquina.filter(om => om.id !== editingId).map(om => om.op_geral_id));
+  const availableOGs = activeOGs.filter(o =>
+    (o.id === form.opGeralId || !distributedOgIds.has(o.id)) && (!form.date || o.date === form.date)
+  );
 
   function startEdit(o) {
     setForm({
@@ -1217,8 +1225,14 @@ function DistribuicaoTab({ ordersGeral, ordersMaquina, setOrdersMaquina, product
         <div style={styles.card}>
           <div style={styles.cardTitle}>{editingId ? `Editar OP de Máquina: ${editingId}` : 'Nova distribuição por injetora'}</div>
           <form onSubmit={submit} className="bp-form-grid" style={styles.formGrid}>
-            <Field label="OP Geral" wide><select style={styles.input} value={form.opGeralId} onChange={e => setForm({ ...form, opGeralId: e.target.value })}><option value="">Selecione…</option>{activeOGs.map(o => <option key={o.id} value={o.id}>{o.id} — {o.product_code}</option>)}</select></Field>
             <Field label="Data"><input type="date" style={styles.input} value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></Field>
+            <Field label="OP Geral" wide>
+              <select style={styles.input} value={form.opGeralId} onChange={e => setForm({ ...form, opGeralId: e.target.value })}>
+                <option value="">Selecione…</option>
+                {availableOGs.map(o => <option key={o.id} value={o.id}>{o.id} — {o.product_code}</option>)}
+              </select>
+              {form.date && !availableOGs.length && <div style={styles.caption}>Nenhuma OP Geral pendente pra essa data.</div>}
+            </Field>
             <Field label="Injetora"><select style={styles.input} value={form.injetora} onChange={e => setForm({ ...form, injetora: e.target.value })}>{selectableNames(injetoras, 'ativa', form.injetora).map(i => <option key={i}>{i}</option>)}</select></Field>
             <Field label="Qtd. programada (dia)"><input type="number" style={styles.input} value={form.qtdProgramada} onChange={e => setForm({ ...form, qtdProgramada: e.target.value })} /></Field>
             <Field label="Operador 1º Turno">
