@@ -652,10 +652,10 @@ function Kpi({ label, value, accent }) {
 
 /* ============================== CADASTROS ============================== */
 
-function CadastrosTab({ products, setProducts, rawMaterials, productMaterials, reloadProductMaterials, canEdit, onError }) {
+function CadastrosTab({ products, setProducts, rawMaterials, productMaterials, reloadProductMaterials, fornecedores, canEdit, onError }) {
   // A injetora não é mais escolhida aqui — o vínculo produto↔injetora acontece
   // na aba Distribuição Injetoras, na hora de gerar a OP de máquina.
-  function emptyProduct() { return { code: '', name: '', molde: '', maquina: '', prodDia: '', peso: '', cavidades: '', materials: [{ rawMaterialCode: '', percentual: '' }] }; }
+  function emptyProduct() { return { code: '', name: '', molde: '', maquina: '', prodDia: '', peso: '', cavidades: '', supplierId: '', materials: [{ rawMaterialCode: '', percentual: '' }] }; }
   const [form, setForm] = useState(emptyProduct());
   const [editingCode, setEditingCode] = useState(null);
   // form.peso fica sempre gravado em gramas por baixo dos panos (é o que a
@@ -675,7 +675,7 @@ function CadastrosTab({ products, setProducts, rawMaterials, productMaterials, r
       .map(m => ({ rawMaterialCode: m.raw_material_code, percentual: m.percentual }));
     setForm({
       code: p.code, name: p.name, molde: p.molde || '', maquina: p.maquina || '',
-      prodDia: p.prod_dia ?? '', peso: p.peso ?? '', cavidades: p.cavidades ?? '',
+      prodDia: p.prod_dia ?? '', peso: p.peso ?? '', cavidades: p.cavidades ?? '', supplierId: p.supplier_id || '',
       materials: mats.length ? mats : [{ rawMaterialCode: '', percentual: '' }],
     });
     setEditingCode(p.code);
@@ -691,11 +691,11 @@ function CadastrosTab({ products, setProducts, rawMaterials, productMaterials, r
       if (editingCode) {
         await api.products.update(editingCode, { ...form, materials });
         setProducts(products.map(p => p.code === editingCode
-          ? { ...p, name: form.name, molde: form.molde, maquina: form.maquina, prod_dia: form.prodDia, peso: form.peso, cavidades: form.cavidades }
+          ? { ...p, name: form.name, molde: form.molde, maquina: form.maquina, prod_dia: form.prodDia, peso: form.peso, cavidades: form.cavidades, supplier_id: form.supplierId }
           : p));
       } else {
         await api.products.create({ ...form, materials });
-        setProducts([...products, { code: form.code, name: form.name, molde: form.molde, maquina: form.maquina, prod_dia: form.prodDia, peso: form.peso, cavidades: form.cavidades }]);
+        setProducts([...products, { code: form.code, name: form.name, molde: form.molde, maquina: form.maquina, prod_dia: form.prodDia, peso: form.peso, cavidades: form.cavidades, supplier_id: form.supplierId }]);
       }
       await reloadProductMaterials();
       setForm(emptyProduct());
@@ -743,6 +743,12 @@ function CadastrosTab({ products, setProducts, rawMaterials, productMaterials, r
                 </div>
               </Field>
               <Field label="Cavidades"><input type="number" style={styles.input} value={form.cavidades} onChange={e => setForm({ ...form, cavidades: e.target.value })} /></Field>
+              <Field label="Fornecedor">
+                <select style={styles.input} value={form.supplierId} onChange={e => setForm({ ...form, supplierId: e.target.value })}>
+                  <option value="">— não vinculado —</option>
+                  {fornecedores.filter(f => f.ativo || f.id === form.supplierId).map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
+                </select>
+              </Field>
             </div>
 
             <div style={styles.subTitle}>Composição (matérias-primas do produto)</div>
@@ -780,7 +786,7 @@ function CadastrosTab({ products, setProducts, rawMaterials, productMaterials, r
       <div style={styles.card}>
         <div style={styles.cardTitle}>Produtos cadastrados ({products.length})</div>
         <Table
-          columns={['Código', 'Produto', 'Molde', 'Peso (g)', 'Composição', 'Cavidades', canEdit ? 'Ações' : null].filter(Boolean)}
+          columns={['Código', 'Produto', 'Molde', 'Peso (g)', 'Composição', 'Cavidades', 'Fornecedor', canEdit ? 'Ações' : null].filter(Boolean)}
           rows={products.map(p => {
             const mats = productMaterials.filter(m => m.product_code === p.code);
             const compStr = mats.length
@@ -788,6 +794,7 @@ function CadastrosTab({ products, setProducts, rawMaterials, productMaterials, r
               : '—';
             return [
               <span style={styles.mono}>{p.code}</span>, p.name, p.molde, fmt(p.peso), compStr, p.cavidades,
+              fornecedores.find(f => f.id === p.supplier_id)?.nome || '—',
               canEdit ? (
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button style={styles.iconBtn} onClick={() => startEdit(p)}><Pencil size={13} /></button>
@@ -1860,9 +1867,13 @@ function ExpedicaoTab({ products, fornecedores, canEdit, onError }) {
   }
 
   const readOnly = !canEdit || editingStatus === 'finalizado';
+  // Depois que o primeiro produto entra no romaneio, trava o fornecedor —
+  // trocar no meio deixaria itens de fornecedores diferentes misturados.
+  const fornecedorTravado = readOnly || itens.length > 0;
 
+  const produtosDoFornecedor = form.supplierId ? products.filter(p => p.supplier_id === form.supplierId) : [];
   const produtosFiltrados = busca.trim()
-    ? products.filter(p => p.code.toLowerCase().includes(busca.toLowerCase()) || (p.name || '').toLowerCase().includes(busca.toLowerCase())).slice(0, 12)
+    ? produtosDoFornecedor.filter(p => p.code.toLowerCase().includes(busca.toLowerCase()) || (p.name || '').toLowerCase().includes(busca.toLowerCase())).slice(0, 12)
     : [];
 
   function addItem() {
@@ -1921,7 +1932,7 @@ function ExpedicaoTab({ products, fornecedores, canEdit, onError }) {
 
   return (
     <div>
-      <div style={styles.card}>
+      <div className="no-print" style={styles.card}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {canEdit && <button type="button" style={mode === 'novo' ? styles.primaryBtn : styles.secondaryBtn} onClick={startNovo}>Novo romaneio</button>}
           <button type="button" style={mode === 'historico' ? styles.primaryBtn : styles.secondaryBtn} onClick={() => setMode('historico')}>Histórico</button>
@@ -1930,82 +1941,136 @@ function ExpedicaoTab({ products, fornecedores, canEdit, onError }) {
 
       {mode === 'novo' && (
         <div style={styles.card}>
-          <div style={styles.cardTitle}>
-            {editingId ? `Romaneio ${editingId}${fornecedorNome ? ' — ' + fornecedorNome : ''}` : 'Novo romaneio'}
-            {editingStatus === 'finalizado' && <span style={{ ...styles.badge, marginLeft: 8, background: '#4C8C6B22', color: '#4C8C6B' }}>Finalizado</span>}
-          </div>
-          {editingStatus === 'finalizado' && (
-            <div style={{ ...styles.caption, marginBottom: 10 }}>Esse romaneio já foi finalizado. Reabra pra poder alterar a carga.</div>
-          )}
+          <div className="no-print">
+            <div style={styles.cardTitle}>
+              {editingId ? `Romaneio ${editingId}${fornecedorNome ? ' — ' + fornecedorNome : ''}` : 'Novo romaneio'}
+              {editingStatus === 'finalizado' && <span style={{ ...styles.badge, marginLeft: 8, background: '#4C8C6B22', color: '#4C8C6B' }}>Finalizado</span>}
+            </div>
+            {editingStatus === 'finalizado' && (
+              <div style={{ ...styles.caption, marginBottom: 10 }}>Esse romaneio já foi finalizado. Reabra pra poder alterar a carga.</div>
+            )}
 
-          <div className="bp-form-grid" style={styles.formGrid}>
-            <Field label="Fornecedor">
-              <select style={styles.input} value={form.supplierId} disabled={readOnly} onChange={e => setForm({ ...form, supplierId: e.target.value })}>
-                <option value="">Selecione…</option>
-                {fornecedorOptions.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
-              </select>
-            </Field>
-            <Field label="Data"><input type="date" style={styles.input} value={form.date} disabled={readOnly} onChange={e => setForm({ ...form, date: e.target.value })} /></Field>
-            <Field label="Caminhão (opcional)"><input style={styles.input} value={form.caminhao} disabled={readOnly} onChange={e => setForm({ ...form, caminhao: e.target.value })} /></Field>
-            <Field label="Motorista (opcional)"><input style={styles.input} value={form.motorista} disabled={readOnly} onChange={e => setForm({ ...form, motorista: e.target.value })} /></Field>
-            <Field label="Assinatura" wide><input style={styles.input} value={form.assinatura} disabled={readOnly} onChange={e => setForm({ ...form, assinatura: e.target.value })} /></Field>
-          </div>
+            <div className="bp-form-grid" style={styles.formGrid}>
+              <Field label="Fornecedor">
+                <select style={styles.input} value={form.supplierId} disabled={fornecedorTravado} onChange={e => setForm({ ...form, supplierId: e.target.value })}>
+                  <option value="">Selecione…</option>
+                  {fornecedorOptions.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
+                </select>
+                {!readOnly && itens.length > 0 && <div style={styles.caption}>Remova os produtos pra poder trocar o fornecedor.</div>}
+              </Field>
+              <Field label="Data"><input type="date" style={styles.input} value={form.date} disabled={readOnly} onChange={e => setForm({ ...form, date: e.target.value })} /></Field>
+              <Field label="Caminhão (opcional)"><input style={styles.input} value={form.caminhao} disabled={readOnly} onChange={e => setForm({ ...form, caminhao: e.target.value })} /></Field>
+              <Field label="Motorista (opcional)"><input style={styles.input} value={form.motorista} disabled={readOnly} onChange={e => setForm({ ...form, motorista: e.target.value })} /></Field>
+              <Field label="Assinatura" wide><input style={styles.input} value={form.assinatura} disabled={readOnly} onChange={e => setForm({ ...form, assinatura: e.target.value })} /></Field>
+            </div>
 
-          {!readOnly && (
-            <>
-              <div style={styles.subTitle}>Adicionar produto (só produto acabado — matéria-prima não aparece aqui)</div>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                <div style={{ flex: '2 1 260px', position: 'relative' }}>
-                  <label style={styles.label}>Buscar produto (código ou nome)</label>
-                  <input
-                    style={styles.input}
-                    value={produtoSelecionado ? `${produtoSelecionado} — ${products.find(p => p.code === produtoSelecionado)?.name || ''}` : busca}
-                    onChange={e => { setBusca(e.target.value); setProdutoSelecionado(''); }}
-                    placeholder="Digite pra buscar…"
-                  />
-                  {busca && !produtoSelecionado && produtosFiltrados.length > 0 && (
-                    <div style={{ position: 'absolute', zIndex: 5, background: '#fff', border: '1px solid #D5D8D9', borderRadius: 6, width: '100%', maxHeight: 220, overflowY: 'auto', boxShadow: '0 8px 20px rgba(0,0,0,0.12)' }}>
-                      {produtosFiltrados.map(p => (
-                        <div
-                          key={p.code}
-                          style={{ padding: '7px 10px', cursor: 'pointer', fontSize: 12.5, borderBottom: '1px solid #F0F1F1' }}
-                          onMouseDown={() => { setProdutoSelecionado(p.code); setBusca(''); }}
-                        >
-                          <span style={styles.mono}>{p.code}</span> — {p.name}
-                        </div>
-                      ))}
+            {!readOnly && (
+              <>
+                <div style={styles.subTitle}>Adicionar produto (só produto acabado — matéria-prima não aparece aqui)</div>
+                {!form.supplierId ? (
+                  <div style={{ ...styles.caption, marginBottom: 10 }}>Selecione o fornecedor pra ver os produtos dele.</div>
+                ) : (
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                    <div style={{ flex: '2 1 260px', position: 'relative' }}>
+                      <label style={styles.label}>Buscar produto (código ou nome)</label>
+                      <input
+                        style={styles.input}
+                        value={produtoSelecionado ? `${produtoSelecionado} — ${products.find(p => p.code === produtoSelecionado)?.name || ''}` : busca}
+                        onChange={e => { setBusca(e.target.value); setProdutoSelecionado(''); }}
+                        placeholder="Digite pra buscar…"
+                      />
+                      {busca && !produtoSelecionado && (
+                        produtosFiltrados.length > 0 ? (
+                          <div style={{ position: 'absolute', zIndex: 5, background: '#fff', border: '1px solid #D5D8D9', borderRadius: 6, width: '100%', maxHeight: 220, overflowY: 'auto', boxShadow: '0 8px 20px rgba(0,0,0,0.12)' }}>
+                            {produtosFiltrados.map(p => (
+                              <div
+                                key={p.code}
+                                style={{ padding: '7px 10px', cursor: 'pointer', fontSize: 12.5, borderBottom: '1px solid #F0F1F1' }}
+                                onMouseDown={() => { setProdutoSelecionado(p.code); setBusca(''); }}
+                              >
+                                <span style={styles.mono}>{p.code}</span> — {p.name}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div style={{ ...styles.caption, marginTop: 4 }}>Nenhum produto desse fornecedor encontrado.</div>
+                        )
+                      )}
                     </div>
-                  )}
-                </div>
-                <div style={{ flex: '0 1 130px' }}>
-                  <label style={styles.label}>Quantidade</label>
-                  <input type="number" step="1" style={styles.input} value={qtdInput} onChange={e => setQtdInput(e.target.value)} />
-                </div>
-                <button type="button" style={styles.secondaryBtn} disabled={!produtoSelecionado || !qtdInput} onClick={addItem}><Plus size={14} /> Adicionar</button>
-              </div>
-            </>
-          )}
-
-          <Table
-            columns={['Código', 'Produto', 'Quantidade', !readOnly ? 'Ações' : null].filter(Boolean)}
-            rows={itens.map(i => [
-              <span style={styles.mono}>{i.productCode}</span>,
-              i.productName || products.find(p => p.code === i.productCode)?.name || '—',
-              fmt(i.quantidade, 0),
-              !readOnly ? <button style={styles.iconBtnDanger} onClick={() => removeItem(i.productCode)}><Trash2 size={13} /></button> : null,
-            ].filter(v => v !== null))}
-          />
-
-          <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-            {!readOnly && <button type="button" style={styles.primaryBtn} disabled={busy} onClick={salvar}><Save size={14} /> {editingId ? 'Salvar alterações' : 'Salvar romaneio'}</button>}
-            {canEdit && editingId && editingStatus !== 'finalizado' && (
-              <button type="button" style={{ ...styles.secondaryBtn, color: '#4C8C6B', borderColor: '#4C8C6B' }} disabled={busy} onClick={() => finalizar(editingId)}><CheckCircle2 size={14} /> Finalizar romaneio</button>
+                    <div style={{ flex: '0 1 130px' }}>
+                      <label style={styles.label}>Quantidade</label>
+                      <input type="number" step="1" style={styles.input} value={qtdInput} onChange={e => setQtdInput(e.target.value)} />
+                    </div>
+                    <button type="button" style={styles.secondaryBtn} disabled={!produtoSelecionado || !qtdInput} onClick={addItem}><Plus size={14} /> Adicionar</button>
+                  </div>
+                )}
+              </>
             )}
-            {canEdit && editingId && editingStatus === 'finalizado' && (
-              <button type="button" style={styles.secondaryBtn} disabled={busy} onClick={() => reabrir(editingId)}><RotateCcw size={14} /> Reabrir romaneio</button>
-            )}
-            {editingId && <button type="button" style={styles.secondaryBtn} disabled={busy} onClick={() => { resetForm(); setMode('historico'); }}><X size={14} /> {canEdit ? 'Cancelar edição' : 'Voltar'}</button>}
+
+            <Table
+              columns={['Código', 'Produto', 'Quantidade', !readOnly ? 'Ações' : null].filter(Boolean)}
+              rows={itens.map(i => [
+                <span style={styles.mono}>{i.productCode}</span>,
+                i.productName || products.find(p => p.code === i.productCode)?.name || '—',
+                fmt(i.quantidade, 0),
+                !readOnly ? <button style={styles.iconBtnDanger} onClick={() => removeItem(i.productCode)}><Trash2 size={13} /></button> : null,
+              ].filter(v => v !== null))}
+            />
+
+            <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+              {!readOnly && <button type="button" style={styles.primaryBtn} disabled={busy} onClick={salvar}><Save size={14} /> {editingId ? 'Salvar alterações' : 'Salvar romaneio'}</button>}
+              {canEdit && editingId && editingStatus !== 'finalizado' && (
+                <button type="button" style={{ ...styles.secondaryBtn, color: '#4C8C6B', borderColor: '#4C8C6B' }} disabled={busy} onClick={() => finalizar(editingId)}><CheckCircle2 size={14} /> Finalizar romaneio</button>
+              )}
+              {canEdit && editingId && editingStatus === 'finalizado' && (
+                <button type="button" style={styles.secondaryBtn} disabled={busy} onClick={() => reabrir(editingId)}><RotateCcw size={14} /> Reabrir romaneio</button>
+              )}
+              {editingId && <button type="button" style={styles.secondaryBtn} disabled={busy} onClick={() => window.print()}><Printer size={14} /> Imprimir romaneio</button>}
+              {editingId && <button type="button" style={styles.secondaryBtn} disabled={busy} onClick={() => { resetForm(); setMode('historico'); }}><X size={14} /> {canEdit ? 'Cancelar edição' : 'Voltar'}</button>}
+            </div>
           </div>
+
+          {editingId && (
+            <div className="bp-print-only">
+              <div style={styles.printHeader}>
+                <div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16 }}>ROMANEIO {editingId}</div>
+                  <div style={{ fontSize: 12, marginTop: 2 }}>Fornecedor: {fornecedorNome || '—'}</div>
+                  <div style={{ fontSize: 12 }}>Data: {form.date ? new Date(form.date + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</div>
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 600 }}>BARELLA PLAST</div>
+              </div>
+
+              <div className="bp-grid-2" style={{ gap: 10, margin: '14px 0 18px', fontSize: 12 }}>
+                <div>Caminhão: {form.caminhao || <span style={{ display: 'inline-block', minWidth: 160, borderBottom: '1px solid #333' }}>&nbsp;</span>}</div>
+                <div>Motorista: {form.motorista || <span style={{ display: 'inline-block', minWidth: 160, borderBottom: '1px solid #333' }}>&nbsp;</span>}</div>
+              </div>
+
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: 'left', borderBottom: '2px solid #333', padding: '4px 6px' }}>Código</th>
+                    <th style={{ textAlign: 'left', borderBottom: '2px solid #333', padding: '4px 6px' }}>Produto</th>
+                    <th style={{ textAlign: 'right', borderBottom: '2px solid #333', padding: '4px 6px' }}>Quantidade</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {itens.map(i => (
+                    <tr key={i.productCode}>
+                      <td style={{ padding: '4px 6px', borderBottom: '1px solid #ccc' }}>{i.productCode}</td>
+                      <td style={{ padding: '4px 6px', borderBottom: '1px solid #ccc' }}>{i.productName || products.find(p => p.code === i.productCode)?.name || '—'}</td>
+                      <td style={{ padding: '4px 6px', borderBottom: '1px solid #ccc', textAlign: 'right' }}>{fmt(i.quantidade, 0)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div style={{ marginTop: 56, pageBreakInside: 'avoid' }}>
+                <div style={{ borderTop: '1px solid #333', width: 300 }} />
+                <div style={{ fontSize: 12, marginTop: 4 }}>Assinatura{form.assinatura ? `: ${form.assinatura}` : ''}</div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -2261,6 +2326,10 @@ function GlobalStyle() {
          o ícone nativo do navegador (Edge/IE) pra não ficar duplicado por cima. */
       input[type="password"]::-ms-reveal, input[type="password"]::-ms-clear { display: none; }
 
+      /* Conteúdo que só deve aparecer na impressão (ex.: layout formal do
+         romaneio, com assinatura separada dos itens) — escondido na tela. */
+      .bp-print-only { display: none; }
+
       .bp-sidebar { width: 250px; min-width: 250px; }
       .bp-menu-btn { display: none; }
       .bp-content { padding: 22px; }
@@ -2297,6 +2366,7 @@ function GlobalStyle() {
 
       @media print {
         .bp-sidebar, .bp-sidebar-backdrop, .bp-menu-btn, header, .no-print { display: none !important; }
+        .bp-print-only { display: block !important; }
 
         /* O layout normal usa altura fixa (100vh) com rolagem interna no
            conteúdo — ótimo pra tela, mas na impressão isso "prende" tudo numa

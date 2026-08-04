@@ -38,7 +38,8 @@ async function init() {
       virgem REAL,
       moido REAL,
       pigmento REAL,
-      cavidades INTEGER
+      cavidades INTEGER,
+      supplier_id TEXT
     );
 
     CREATE TABLE IF NOT EXISTS raw_materials (
@@ -159,6 +160,11 @@ async function init() {
     -- Expedição: cadastro de fornecedor + romaneio (cabeçalho + itens de
     -- produto acabado). Finalizar um romaneio debita estoque_pa (pode ficar
     -- negativo, mesma lógica já usada em estoque_em_processo); reabrir reverte.
+    -- products já existe em produção, então o fornecedor do produto entra por
+    -- ADD COLUMN IF NOT EXISTS — é o que filtra os itens disponíveis no
+    -- romaneio conforme o fornecedor escolhido no cabeçalho.
+    ALTER TABLE products ADD COLUMN IF NOT EXISTS supplier_id TEXT;
+
     CREATE TABLE IF NOT EXISTS fornecedores (
       id TEXT PRIMARY KEY,
       nome TEXT NOT NULL,
