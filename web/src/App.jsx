@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Factory, LogOut, Lock, Unlock, Plus, Trash2, Save, X, Menu, AlertTriangle,
-  Eye, EyeOff, KeyRound, Printer, Pencil,
+  Eye, EyeOff, KeyRound, Printer, Pencil, CheckCircle2, RotateCcw,
 } from 'lucide-react';
 import { styles } from './styles.js';
 import { api, getToken, setToken } from './api.js';
@@ -26,6 +26,7 @@ export default function App() {
   const [productMaterials, setProductMaterials] = useState([]);
   const [operators, setOperators] = useState([]);
   const [injetoras, setInjetoras] = useState([]);
+  const [fornecedores, setFornecedores] = useState([]);
   const [ordersGeral, setOrdersGeral] = useState([]);
   const [ordersMaquina, setOrdersMaquina] = useState([]);
   const [apontamentos, setApontamentos] = useState([]);
@@ -56,11 +57,11 @@ export default function App() {
 
   async function loadCoreData() {
     try {
-      const [pr, rm, pm, ops, inj, og, om, ap] = await Promise.all([
+      const [pr, rm, pm, ops, inj, forn, og, om, ap] = await Promise.all([
         api.products.list(), api.rawMaterials.list(), api.productMaterials.list(), api.operators.list(),
-        api.injetoras.list(), api.ordersGeral.list(), api.ordersMaquina.list(), api.apontamentos.list(),
+        api.injetoras.list(), api.fornecedores.list(), api.ordersGeral.list(), api.ordersMaquina.list(), api.apontamentos.list(),
       ]);
-      setProducts(pr); setRawMaterials(rm); setProductMaterials(pm); setOperators(ops); setInjetoras(inj);
+      setProducts(pr); setRawMaterials(rm); setProductMaterials(pm); setOperators(ops); setInjetoras(inj); setFornecedores(forn);
       setOrdersGeral(og); setOrdersMaquina(om); setApontamentos(ap);
       setDataErr('');
     } catch (e) {
@@ -78,6 +79,10 @@ export default function App() {
 
   async function reloadInjetoras() {
     try { setInjetoras(await api.injetoras.list()); } catch (e) { setDataErr(e.message); }
+  }
+
+  async function reloadFornecedores() {
+    try { setFornecedores(await api.fornecedores.list()); } catch (e) { setDataErr(e.message); }
   }
 
   async function handleLogin(username, password) {
@@ -224,6 +229,7 @@ export default function App() {
               productMaterials={productMaterials} reloadProductMaterials={reloadProductMaterials}
               operators={operators} reloadOperators={reloadOperators}
               injetoras={injetoras} reloadInjetoras={reloadInjetoras}
+              fornecedores={fornecedores} reloadFornecedores={reloadFornecedores}
               ordersGeral={ordersGeral} setOrdersGeral={setOrdersGeral}
               ordersMaquina={ordersMaquina} setOrdersMaquina={setOrdersMaquina}
               apontamentos={apontamentos} setApontamentos={setApontamentos}
@@ -417,12 +423,14 @@ function TabRouter(props) {
     case 'materiasPrimas': return <MateriasPrimasTab {...props} />;
     case 'operadores': return <OperadoresTab {...props} />;
     case 'injetoras': return <InjetorasTab {...props} />;
+    case 'fornecedores': return <FornecedoresTab {...props} />;
     case 'programacaoGeral': return <ProgramacaoGeralTab {...props} />;
     case 'distribuicaoInjetoras': return <DistribuicaoTab {...props} />;
     case 'apontamento': return <ApontamentoTab {...props} />;
     case 'opImpressao': return <OpImpressaoTab {...props} />;
     case 'consolidadoMP': return <ConsolidadoMPTab {...props} />;
     case 'estoque': return <EstoqueTab {...props} />;
+    case 'expedicao': return <ExpedicaoTab {...props} />;
     case 'comparativoMensal': return <ComparativoMensalTab {...props} />;
     case 'perdasOperadores': return <PerdasOperadoresTab {...props} />;
     case 'usuarios': return <UsuariosTab {...props} />;
@@ -998,6 +1006,69 @@ function InjetorasTab({ injetoras, reloadInjetoras, canEdit, onError }) {
                   {i.ativa
                     ? <button style={styles.secondaryBtn} onClick={() => setActive(i.id, false)}>Inativar</button>
                     : <button style={styles.secondaryBtn} onClick={() => setActive(i.id, true)}>Ativar</button>}
+                </div>
+              ) : null,
+            ].filter(v => v !== null))}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FornecedoresTab({ fornecedores, reloadFornecedores, canEdit, onError }) {
+  const [nome, setNome] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => { reloadFornecedores().then(() => setLoaded(true)); /* eslint-disable-next-line */ }, []);
+
+  function startEdit(f) { setEditingId(f.id); setNome(f.nome); }
+  function cancelEdit() { setEditingId(null); setNome(''); }
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!nome.trim()) return;
+    try {
+      if (editingId) await api.fornecedores.update(editingId, { nome });
+      else await api.fornecedores.create({ nome });
+      await reloadFornecedores();
+      setNome(''); setEditingId(null);
+    } catch (e) { onError(e.message); }
+  }
+  async function setActive(id, active) {
+    try { await api.fornecedores.setActive(id, active); await reloadFornecedores(); }
+    catch (e) { onError(e.message); }
+  }
+
+  return (
+    <div>
+      {canEdit && (
+        <div style={styles.card}>
+          <div style={styles.cardTitle}>{editingId ? 'Editar fornecedor' : 'Novo fornecedor'}</div>
+          <form onSubmit={submit} className="bp-form-grid" style={styles.formGrid}>
+            <Field label="Nome" wide><input style={styles.input} value={nome} onChange={e => setNome(e.target.value)} placeholder="ex: Braskem" /></Field>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+              <button type="submit" style={styles.primaryBtn}>{editingId ? <><Save size={14} /> Salvar</> : <><Plus size={14} /> Cadastrar fornecedor</>}</button>
+              {editingId && <button type="button" style={styles.secondaryBtn} onClick={cancelEdit}><X size={14} /> Cancelar</button>}
+            </div>
+          </form>
+        </div>
+      )}
+      <div style={styles.card}>
+        <div style={styles.cardTitle}>Fornecedores cadastrados ({fornecedores.length})</div>
+        {!loaded ? <div style={styles.emptyState}>Carregando…</div> : (
+          <Table
+            columns={['Nome', 'Status', canEdit ? 'Ações' : null].filter(Boolean)}
+            rows={fornecedores.map(f => [
+              f.nome,
+              <span style={{ ...styles.badge, background: (f.ativo ? '#4C8C6B' : '#8A8F94') + '22', color: f.ativo ? '#4C8C6B' : '#8A8F94' }}>{f.ativo ? 'Ativo' : 'Inativo'}</span>,
+              canEdit ? (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button style={styles.iconBtn} onClick={() => startEdit(f)}><Pencil size={13} /></button>
+                  {f.ativo
+                    ? <button style={styles.secondaryBtn} onClick={() => setActive(f.id, false)}>Inativar</button>
+                    : <button style={styles.secondaryBtn} onClick={() => setActive(f.id, true)}>Ativar</button>}
                 </div>
               ) : null,
             ].filter(v => v !== null))}
@@ -1708,6 +1779,7 @@ const STOCK_MOVEMENT_LABELS = {
   transferencia_processo: 'MP → Em Processo',
   consumo_processo: 'Consumo em Processo',
   entrada_pa: 'Entrada Produto Acabado',
+  saida_pa: 'Saída Produto Acabado (Romaneio)',
 };
 
 function EstoqueHistorico({ onError }) {
@@ -1732,6 +1804,237 @@ function EstoqueHistorico({ onError }) {
             fmt(m.quantidade), m.referencia || '—', m.usuario || '—',
           ])}
         />
+      )}
+    </div>
+  );
+}
+
+/* ============================== EXPEDIÇÃO / ROMANEIO ============================== */
+
+function emptyRomaneioForm() {
+  return { supplierId: '', date: new Date().toISOString().slice(0, 10), caminhao: '', motorista: '', assinatura: '' };
+}
+
+function ExpedicaoTab({ products, fornecedores, canEdit, onError }) {
+  const [mode, setMode] = useState('historico'); // 'novo' | 'historico'
+  const [romaneios, setRomaneios] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const [editingId, setEditingId] = useState(null);
+  const [editingStatus, setEditingStatus] = useState(null);
+  const [form, setForm] = useState(emptyRomaneioForm());
+  const [itens, setItens] = useState([]); // { productCode, quantidade, productName }
+  const [busca, setBusca] = useState('');
+  const [produtoSelecionado, setProdutoSelecionado] = useState('');
+  const [qtdInput, setQtdInput] = useState('');
+
+  async function reloadRomaneios() {
+    try { setRomaneios(await api.expedicao.list()); } catch (e) { onError(e.message); }
+  }
+  useEffect(() => { reloadRomaneios().then(() => setLoaded(true)); /* eslint-disable-next-line */ }, []);
+
+  function resetForm() {
+    setForm(emptyRomaneioForm());
+    setItens([]);
+    setEditingId(null);
+    setEditingStatus(null);
+    setBusca(''); setProdutoSelecionado(''); setQtdInput('');
+  }
+
+  async function startNovo() { resetForm(); setMode('novo'); }
+
+  async function startEdit(r) {
+    try {
+      const full = await api.expedicao.get(r.id);
+      setForm({
+        supplierId: full.supplier_id || '', date: full.date || '',
+        caminhao: full.caminhao || '', motorista: full.motorista || '', assinatura: full.assinatura || '',
+      });
+      setItens(full.itens.map(i => ({ productCode: i.product_code, quantidade: i.quantidade, productName: i.product_name })));
+      setEditingId(full.id);
+      setEditingStatus(full.status);
+      setBusca(''); setProdutoSelecionado(''); setQtdInput('');
+      setMode('novo');
+    } catch (e) { onError(e.message); }
+  }
+
+  const readOnly = !canEdit || editingStatus === 'finalizado';
+
+  const produtosFiltrados = busca.trim()
+    ? products.filter(p => p.code.toLowerCase().includes(busca.toLowerCase()) || (p.name || '').toLowerCase().includes(busca.toLowerCase())).slice(0, 12)
+    : [];
+
+  function addItem() {
+    if (!produtoSelecionado || !qtdInput || Number(qtdInput) <= 0) return;
+    const p = products.find(x => x.code === produtoSelecionado);
+    setItens(prev => {
+      const existing = prev.find(i => i.productCode === produtoSelecionado);
+      if (existing) return prev.map(i => i.productCode === produtoSelecionado ? { ...i, quantidade: Number(i.quantidade) + Number(qtdInput) } : i);
+      return [...prev, { productCode: produtoSelecionado, quantidade: Number(qtdInput), productName: p?.name }];
+    });
+    setProdutoSelecionado(''); setQtdInput(''); setBusca('');
+  }
+  function removeItem(code) { setItens(prev => prev.filter(i => i.productCode !== code)); }
+
+  async function salvar() {
+    if (!itens.length) { onError('Adicione ao menos um produto ao romaneio.'); return; }
+    setBusy(true);
+    try {
+      const payload = { ...form, itens: itens.map(i => ({ productCode: i.productCode, quantidade: i.quantidade })) };
+      if (editingId) await api.expedicao.update(editingId, payload);
+      else await api.expedicao.create(payload);
+      await reloadRomaneios();
+      resetForm();
+      setMode('historico');
+    } catch (e) { onError(e.message); }
+    setBusy(false);
+  }
+
+  async function finalizar(id) {
+    setBusy(true);
+    try {
+      await api.expedicao.finalizar(id);
+      await reloadRomaneios();
+      if (editingId === id) setEditingStatus('finalizado');
+    } catch (e) { onError(e.message); }
+    setBusy(false);
+  }
+  async function reabrir(id) {
+    setBusy(true);
+    try {
+      await api.expedicao.reabrir(id);
+      await reloadRomaneios();
+      if (editingId === id) setEditingStatus('aberto');
+    } catch (e) { onError(e.message); }
+    setBusy(false);
+  }
+  async function remove(id) {
+    setBusy(true);
+    try { await api.expedicao.remove(id); await reloadRomaneios(); if (editingId === id) { resetForm(); setMode('historico'); } }
+    catch (e) { onError(e.message); }
+    setBusy(false);
+  }
+
+  const fornecedorOptions = fornecedores.filter(f => f.ativo || f.id === form.supplierId);
+  const fornecedorNome = fornecedores.find(f => f.id === form.supplierId)?.nome || '';
+
+  return (
+    <div>
+      <div style={styles.card}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {canEdit && <button type="button" style={mode === 'novo' ? styles.primaryBtn : styles.secondaryBtn} onClick={startNovo}>Novo romaneio</button>}
+          <button type="button" style={mode === 'historico' ? styles.primaryBtn : styles.secondaryBtn} onClick={() => setMode('historico')}>Histórico</button>
+        </div>
+      </div>
+
+      {mode === 'novo' && (
+        <div style={styles.card}>
+          <div style={styles.cardTitle}>
+            {editingId ? `Romaneio ${editingId}${fornecedorNome ? ' — ' + fornecedorNome : ''}` : 'Novo romaneio'}
+            {editingStatus === 'finalizado' && <span style={{ ...styles.badge, marginLeft: 8, background: '#4C8C6B22', color: '#4C8C6B' }}>Finalizado</span>}
+          </div>
+          {editingStatus === 'finalizado' && (
+            <div style={{ ...styles.caption, marginBottom: 10 }}>Esse romaneio já foi finalizado. Reabra pra poder alterar a carga.</div>
+          )}
+
+          <div className="bp-form-grid" style={styles.formGrid}>
+            <Field label="Fornecedor">
+              <select style={styles.input} value={form.supplierId} disabled={readOnly} onChange={e => setForm({ ...form, supplierId: e.target.value })}>
+                <option value="">Selecione…</option>
+                {fornecedorOptions.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
+              </select>
+            </Field>
+            <Field label="Data"><input type="date" style={styles.input} value={form.date} disabled={readOnly} onChange={e => setForm({ ...form, date: e.target.value })} /></Field>
+            <Field label="Caminhão (opcional)"><input style={styles.input} value={form.caminhao} disabled={readOnly} onChange={e => setForm({ ...form, caminhao: e.target.value })} /></Field>
+            <Field label="Motorista (opcional)"><input style={styles.input} value={form.motorista} disabled={readOnly} onChange={e => setForm({ ...form, motorista: e.target.value })} /></Field>
+            <Field label="Assinatura" wide><input style={styles.input} value={form.assinatura} disabled={readOnly} onChange={e => setForm({ ...form, assinatura: e.target.value })} /></Field>
+          </div>
+
+          {!readOnly && (
+            <>
+              <div style={styles.subTitle}>Adicionar produto (só produto acabado — matéria-prima não aparece aqui)</div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <div style={{ flex: '2 1 260px', position: 'relative' }}>
+                  <label style={styles.label}>Buscar produto (código ou nome)</label>
+                  <input
+                    style={styles.input}
+                    value={produtoSelecionado ? `${produtoSelecionado} — ${products.find(p => p.code === produtoSelecionado)?.name || ''}` : busca}
+                    onChange={e => { setBusca(e.target.value); setProdutoSelecionado(''); }}
+                    placeholder="Digite pra buscar…"
+                  />
+                  {busca && !produtoSelecionado && produtosFiltrados.length > 0 && (
+                    <div style={{ position: 'absolute', zIndex: 5, background: '#fff', border: '1px solid #D5D8D9', borderRadius: 6, width: '100%', maxHeight: 220, overflowY: 'auto', boxShadow: '0 8px 20px rgba(0,0,0,0.12)' }}>
+                      {produtosFiltrados.map(p => (
+                        <div
+                          key={p.code}
+                          style={{ padding: '7px 10px', cursor: 'pointer', fontSize: 12.5, borderBottom: '1px solid #F0F1F1' }}
+                          onMouseDown={() => { setProdutoSelecionado(p.code); setBusca(''); }}
+                        >
+                          <span style={styles.mono}>{p.code}</span> — {p.name}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div style={{ flex: '0 1 130px' }}>
+                  <label style={styles.label}>Quantidade</label>
+                  <input type="number" step="1" style={styles.input} value={qtdInput} onChange={e => setQtdInput(e.target.value)} />
+                </div>
+                <button type="button" style={styles.secondaryBtn} disabled={!produtoSelecionado || !qtdInput} onClick={addItem}><Plus size={14} /> Adicionar</button>
+              </div>
+            </>
+          )}
+
+          <Table
+            columns={['Código', 'Produto', 'Quantidade', !readOnly ? 'Ações' : null].filter(Boolean)}
+            rows={itens.map(i => [
+              <span style={styles.mono}>{i.productCode}</span>,
+              i.productName || products.find(p => p.code === i.productCode)?.name || '—',
+              fmt(i.quantidade, 0),
+              !readOnly ? <button style={styles.iconBtnDanger} onClick={() => removeItem(i.productCode)}><Trash2 size={13} /></button> : null,
+            ].filter(v => v !== null))}
+          />
+
+          <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+            {!readOnly && <button type="button" style={styles.primaryBtn} disabled={busy} onClick={salvar}><Save size={14} /> {editingId ? 'Salvar alterações' : 'Salvar romaneio'}</button>}
+            {canEdit && editingId && editingStatus !== 'finalizado' && (
+              <button type="button" style={{ ...styles.secondaryBtn, color: '#4C8C6B', borderColor: '#4C8C6B' }} disabled={busy} onClick={() => finalizar(editingId)}><CheckCircle2 size={14} /> Finalizar romaneio</button>
+            )}
+            {canEdit && editingId && editingStatus === 'finalizado' && (
+              <button type="button" style={styles.secondaryBtn} disabled={busy} onClick={() => reabrir(editingId)}><RotateCcw size={14} /> Reabrir romaneio</button>
+            )}
+            {editingId && <button type="button" style={styles.secondaryBtn} disabled={busy} onClick={() => { resetForm(); setMode('historico'); }}><X size={14} /> {canEdit ? 'Cancelar edição' : 'Voltar'}</button>}
+          </div>
+        </div>
+      )}
+
+      {mode === 'historico' && (
+        <div style={styles.card}>
+          <div style={styles.cardTitle}>Romaneios ({romaneios.length})</div>
+          {!loaded ? <div style={styles.emptyState}>Carregando…</div> : (
+            <Table
+              columns={['Romaneio', 'Fornecedor', 'Data', 'Itens', 'Qtd. total', 'Status', 'Ações']}
+              rows={romaneios.map(r => [
+                <span style={styles.mono}>{r.id}</span>,
+                r.fornecedor_nome || '—',
+                r.date ? new Date(r.date + 'T00:00:00').toLocaleDateString('pt-BR') : '—',
+                r.total_itens,
+                fmt(r.total_quantidade, 0),
+                <span style={{ ...styles.badge, background: (r.status === 'finalizado' ? '#4C8C6B' : '#E8A324') + '22', color: r.status === 'finalizado' ? '#4C8C6B' : '#B8791A' }}>
+                  {r.status === 'finalizado' ? 'Finalizado' : 'Aberto'}
+                </span>,
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <button style={styles.iconBtn} onClick={() => startEdit(r)}>{canEdit && r.status === 'aberto' ? <Pencil size={13} /> : <Eye size={13} />}</button>
+                  {canEdit && (r.status === 'aberto'
+                    ? <button style={{ ...styles.secondaryBtn, padding: '4px 8px', fontSize: 12 }} disabled={busy} onClick={() => finalizar(r.id)}>Finalizar</button>
+                    : <button style={{ ...styles.secondaryBtn, padding: '4px 8px', fontSize: 12 }} disabled={busy} onClick={() => reabrir(r.id)}>Reabrir</button>)}
+                  {canEdit && r.status === 'aberto' && <button style={styles.iconBtnDanger} disabled={busy} onClick={() => remove(r.id)}><Trash2 size={13} /></button>}
+                </div>,
+              ])}
+            />
+          )}
+        </div>
       )}
     </div>
   );

@@ -1,6 +1,7 @@
 import {
   LayoutDashboard, Package, Beaker, ClipboardList, Factory, ClipboardCheck,
   Printer, Boxes, BarChart3, Users2, ShieldCheck, HardHat, Cog, Warehouse,
+  Building2, Truck,
 } from 'lucide-react';
 
 export const ROLES = ['admin', 'pcp', 'operador', 'almoxarifado', 'qualidade', 'gerencia', 'pendente'];
@@ -37,12 +38,14 @@ export const TABS = [
   { id: 'materiasPrimas', label: 'Matérias-Primas', group: 'Cadastros', icon: Beaker },
   { id: 'operadores', label: 'Operadores', group: 'Cadastros', icon: HardHat },
   { id: 'injetoras', label: 'Injetoras', group: 'Cadastros', icon: Cog },
+  { id: 'fornecedores', label: 'Fornecedores', group: 'Cadastros', icon: Building2 },
   { id: 'programacaoGeral', label: 'Programação Geral', group: 'Produção', icon: ClipboardList },
   { id: 'distribuicaoInjetoras', label: 'Distribuição Injetoras', group: 'Produção', icon: Factory },
   { id: 'apontamento', label: 'Apontamento', group: 'Produção', icon: ClipboardCheck },
   { id: 'opImpressao', label: 'OP para Impressão', group: 'Produção', icon: Printer },
   { id: 'consolidadoMP', label: 'Consolidado MP do Dia', group: 'Almoxarifado', icon: Boxes },
   { id: 'estoque', label: 'Estoque', group: 'Almoxarifado', icon: Warehouse },
+  { id: 'expedicao', label: 'Expedição', group: 'Almoxarifado', icon: Truck },
   { id: 'comparativoMensal', label: 'Comparativo Mensal', group: 'Relatórios', icon: BarChart3 },
   { id: 'perdasOperadores', label: 'Produção x Perdas', group: 'Relatórios', icon: BarChart3 },
   { id: 'usuarios', label: 'Usuários', group: 'Administração', icon: Users2 },

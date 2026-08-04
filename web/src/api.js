@@ -94,4 +94,19 @@ export const api = {
     nfeParse: (xml) => request('POST', '/stock/nfe/parse', { xml }),
     nfeConfirmar: (data) => request('POST', '/stock/nfe/confirmar', data),
   },
+  fornecedores: {
+    list: () => request('GET', '/fornecedores'),
+    create: (f) => request('POST', '/fornecedores', f),
+    update: (id, f) => request('PUT', `/fornecedores/${id}`, f),
+    setActive: (id, active) => request('PATCH', `/fornecedores/${id}/active`, { active }),
+  },
+  expedicao: {
+    list: () => request('GET', '/expedicao'),
+    get: (id) => request('GET', `/expedicao/${id}`),
+    create: (r) => request('POST', '/expedicao', r),
+    update: (id, r) => request('PUT', `/expedicao/${id}`, r),
+    finalizar: (id) => request('PATCH', `/expedicao/${id}/finalizar`),
+    reabrir: (id) => request('PATCH', `/expedicao/${id}/reabrir`),
+    remove: (id) => request('DELETE', `/expedicao/${id}`),
+  },
 };

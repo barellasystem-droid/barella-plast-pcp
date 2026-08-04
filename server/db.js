@@ -155,6 +155,40 @@ async function init() {
 
     ALTER TABLE operators ADD COLUMN IF NOT EXISTS turno TEXT;
     ALTER TABLE operators ADD COLUMN IF NOT EXISTS funcao TEXT;
+
+    -- Expedição: cadastro de fornecedor + romaneio (cabeçalho + itens de
+    -- produto acabado). Finalizar um romaneio debita estoque_pa (pode ficar
+    -- negativo, mesma lógica já usada em estoque_em_processo); reabrir reverte.
+    CREATE TABLE IF NOT EXISTS fornecedores (
+      id TEXT PRIMARY KEY,
+      nome TEXT NOT NULL,
+      ativo INTEGER NOT NULL DEFAULT 1,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS romaneios (
+      id TEXT PRIMARY KEY,
+      supplier_id TEXT,
+      date TEXT,
+      caminhao TEXT,
+      motorista TEXT,
+      assinatura TEXT,
+      status TEXT NOT NULL DEFAULT 'aberto',
+      finalizado_em TIMESTAMPTZ,
+      finalizado_por TEXT,
+      created_by TEXT,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE SEQUENCE IF NOT EXISTS romaneios_seq;
+
+    CREATE TABLE IF NOT EXISTS romaneio_itens (
+      id TEXT PRIMARY KEY,
+      romaneio_id TEXT NOT NULL REFERENCES romaneios(id) ON DELETE CASCADE,
+      product_code TEXT NOT NULL,
+      quantidade REAL NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_romaneio_itens_romaneio ON romaneio_itens(romaneio_id);
   `);
 }
 
