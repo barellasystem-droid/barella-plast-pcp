@@ -109,4 +109,9 @@ export const api = {
     reabrir: (id) => request('PATCH', `/expedicao/${id}/reabrir`),
     remove: (id) => request('DELETE', `/expedicao/${id}`),
   },
+  pedidosMensais: {
+    list: (ano, mes) => request('GET', `/pedidos-mensais?ano=${ano}&mes=${mes}`),
+    parse: (xlsxBase64) => request('POST', '/pedidos-mensais/parse', { xlsxBase64 }),
+    confirmar: (data) => request('POST', '/pedidos-mensais/confirmar', data),
+  },
 };

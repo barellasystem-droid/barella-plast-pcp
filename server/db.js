@@ -195,6 +195,27 @@ async function init() {
       created_at TIMESTAMPTZ DEFAULT now()
     );
     CREATE INDEX IF NOT EXISTS idx_romaneio_itens_romaneio ON romaneio_itens(romaneio_id);
+
+    -- Pedido Mensal: uma linha por fornecedor+mês+produto, alimentada por
+    -- upload de planilha (cada reenvio no mês SUBSTITUI pedido/entregue —
+    -- é assim que a planilha de origem do fornecedor já funciona, com
+    -- "saldo de pedido" = pedido - entregue calculado na hora, não guardado).
+    CREATE TABLE IF NOT EXISTS pedidos_mensais (
+      id TEXT PRIMARY KEY,
+      supplier_id TEXT NOT NULL,
+      ano INTEGER NOT NULL,
+      mes INTEGER NOT NULL,
+      product_code TEXT NOT NULL,
+      pedido_mensal REAL NOT NULL DEFAULT 0,
+      entregue REAL NOT NULL DEFAULT 0,
+      referencia TEXT,
+      usuario TEXT,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now(),
+      UNIQUE (supplier_id, ano, mes, product_code)
+    );
+    CREATE INDEX IF NOT EXISTS idx_pedidos_mensais_periodo ON pedidos_mensais(supplier_id, ano, mes);
+    CREATE INDEX IF NOT EXISTS idx_pedidos_mensais_product ON pedidos_mensais(product_code);
   `);
 }
 

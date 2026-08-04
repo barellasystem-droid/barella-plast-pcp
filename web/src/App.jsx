@@ -431,6 +431,7 @@ function TabRouter(props) {
     case 'consolidadoMP': return <ConsolidadoMPTab {...props} />;
     case 'estoque': return <EstoqueTab {...props} />;
     case 'expedicao': return <ExpedicaoTab {...props} />;
+    case 'pedidoMensal': return <PedidoMensalTab {...props} />;
     case 'comparativoMensal': return <ComparativoMensalTab {...props} />;
     case 'perdasOperadores': return <PerdasOperadoresTab {...props} />;
     case 'usuarios': return <UsuariosTab {...props} />;
@@ -2101,6 +2102,313 @@ function ExpedicaoTab({ products, fornecedores, canEdit, onError }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ============================== PEDIDO MENSAL ============================== */
+
+function arrayBufferToBase64(buffer) {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  return btoa(binary);
+}
+
+function PedidoMensalTab({ products, fornecedores, canEdit, onError }) {
+  const now = new Date();
+  const [ano, setAno] = useState(now.getFullYear());
+  const [mes, setMes] = useState(now.getMonth() + 1);
+  const [mode, setMode] = useState('fornecedores'); // 'fornecedores' | 'comparar'
+  const [pedidos, setPedidos] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+
+  async function reload() {
+    try { setPedidos(await api.pedidosMensais.list(ano, mes)); } catch (e) { onError(e.message); }
+  }
+  useEffect(() => { setLoaded(false); reload().then(() => setLoaded(true)); /* eslint-disable-next-line */ }, [ano, mes]);
+
+  const porFornecedor = fornecedores.map(f => ({ fornecedor: f, itens: pedidos.filter(p => p.supplier_id === f.id) }));
+
+  return (
+    <div>
+      <div style={styles.card}>
+        <div className="bp-grid-2" style={{ gap: 12, maxWidth: 420 }}>
+          <Field label="Ano"><input type="number" style={styles.input} value={ano} onChange={e => setAno(Number(e.target.value) || now.getFullYear())} /></Field>
+          <Field label="Mês">
+            <select style={styles.input} value={mes} onChange={e => setMes(Number(e.target.value))}>
+              {MESES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+            </select>
+          </Field>
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          <button type="button" style={mode === 'fornecedores' ? styles.primaryBtn : styles.secondaryBtn} onClick={() => setMode('fornecedores')}>Por fornecedor</button>
+          <button type="button" style={mode === 'comparar' ? styles.primaryBtn : styles.secondaryBtn} onClick={() => setMode('comparar')}>Comparar produtos</button>
+        </div>
+      </div>
+
+      {mode === 'fornecedores' && (
+        !loaded ? <div style={styles.card}><div style={styles.emptyState}>Carregando…</div></div>
+        : !fornecedores.length ? <div style={styles.card}><div style={styles.emptyState}>Nenhum fornecedor cadastrado ainda — cadastre em Cadastros → Fornecedores.</div></div>
+        : porFornecedor.map(({ fornecedor, itens }) => (
+          <FornecedorPedidoCard key={fornecedor.id} fornecedor={fornecedor} itens={itens} products={products} ano={ano} mes={mes} canEdit={canEdit} onError={onError} onImported={reload} />
+        ))
+      )}
+
+      {mode === 'comparar' && <ComparativoPedidoWidget pedidos={pedidos} products={products} fornecedores={fornecedores} />}
+    </div>
+  );
+}
+
+function FornecedorPedidoCard({ fornecedor, itens, products, ano, mes, canEdit, onError, onImported }) {
+  const [uploading, setUploading] = useState(false);
+  const totalPedido = itens.reduce((s, i) => s + Number(i.pedido_mensal || 0), 0);
+  const totalEntregue = itens.reduce((s, i) => s + Number(i.entregue || 0), 0);
+  const totalFalta = totalPedido - totalEntregue;
+
+  return (
+    <div style={styles.card}>
+      <div style={styles.printHeader}>
+        <div style={styles.cardTitle}>{fornecedor.nome}</div>
+        {canEdit && <button type="button" style={styles.secondaryBtn} onClick={() => setUploading(u => !u)}>{uploading ? 'Fechar' : 'Importar planilha'}</button>}
+      </div>
+
+      {uploading && (
+        <PedidoUploadPanel fornecedor={fornecedor} ano={ano} mes={mes} products={products} onError={onError} onDone={() => { setUploading(false); onImported(); }} />
+      )}
+
+      {!itens.length ? (
+        <div style={styles.emptyState}>Nenhum pedido lançado pra {MESES[mes - 1]}/{ano}.</div>
+      ) : (
+        <>
+          <Table
+            columns={['Código', 'Produto', 'Pedido mensal', 'Entregue', 'Falta entregar']}
+            rows={itens.map(i => {
+              const falta = Number(i.pedido_mensal || 0) - Number(i.entregue || 0);
+              return [
+                <span style={styles.mono}>{i.product_code}</span>,
+                i.product_name || '—',
+                fmt(i.pedido_mensal, 0),
+                fmt(i.entregue, 0),
+                <span style={{ color: falta > 0 ? '#B8791A' : '#4C8C6B', fontWeight: 600 }}>{fmt(falta, 0)}</span>,
+              ];
+            })}
+          />
+          <div style={{ display: 'flex', gap: 24, marginTop: 10, fontSize: 12.5 }}>
+            <div><b>Total pedido:</b> {fmt(totalPedido, 0)}</div>
+            <div><b>Total entregue:</b> {fmt(totalEntregue, 0)}</div>
+            <div><b>Total falta entregar:</b> {fmt(totalFalta, 0)}</div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function PedidoUploadPanel({ fornecedor, ano, mes, products, onError, onDone }) {
+  const [busy, setBusy] = useState(false);
+  const [fileName, setFileName] = useState('');
+  const [parsed, setParsed] = useState(null);
+  const [sheetName, setSheetName] = useState('');
+  const [headerRow, setHeaderRow] = useState(0);
+  const [colCodigo, setColCodigo] = useState('');
+  const [colPedido, setColPedido] = useState('');
+  const [colEntregue, setColEntregue] = useState('');
+
+  async function handleFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setBusy(true);
+    try {
+      const buf = await file.arrayBuffer();
+      const data = await api.pedidosMensais.parse(arrayBufferToBase64(buf));
+      setFileName(file.name);
+      setParsed(data);
+      setSheetName(data.detected.sheetName);
+      setHeaderRow(data.detected.headerRowIndex);
+      setColCodigo(data.detected.columnMap.codigo || '');
+      setColPedido(data.detected.columnMap.pedidoMensal || '');
+      setColEntregue(data.detected.columnMap.entregue || '');
+    } catch (err) { onError(err.message); }
+    setBusy(false);
+  }
+
+  const sheet = parsed?.sheets[sheetName];
+  const headerCells = sheet?.rows[headerRow] || {};
+  const dataRows = (sheet && colCodigo) ? sheet.rows.slice(headerRow + 1).filter(r => r[colCodigo] !== undefined && r[colCodigo] !== '') : [];
+  // Junta linhas com o mesmo código (a planilha de origem às vezes repete o
+  // código em variantes separadas) — soma, pra prévia bater com o que o
+  // backend efetivamente salva (ele faz o mesmo agrupamento no confirmar).
+  const previewMap = new Map();
+  for (const r of dataRows) {
+    const code = String(r[colCodigo]).trim();
+    if (!code) continue;
+    const cur = previewMap.get(code) || { productCode: code, pedidoMensal: 0, entregue: 0 };
+    cur.pedidoMensal += Number(r[colPedido]) || 0;
+    cur.entregue += Number(r[colEntregue]) || 0;
+    previewMap.set(code, cur);
+  }
+  const preview = [...previewMap.values()];
+  const codesKnown = new Set(products.map(p => p.code));
+
+  async function confirmar() {
+    if (!colCodigo || !colPedido) { onError('Selecione ao menos a coluna de código e a de pedido mensal.'); return; }
+    if (!preview.length) { onError('Nenhuma linha encontrada com esse mapeamento de colunas.'); return; }
+    setBusy(true);
+    try {
+      await api.pedidosMensais.confirmar({ supplierId: fornecedor.id, ano, mes, referencia: fileName, itens: preview });
+      onDone();
+    } catch (err) { onError(err.message); }
+    setBusy(false);
+  }
+
+  return (
+    <div style={{ border: '1px dashed #D5D8D9', borderRadius: 8, padding: 14, margin: '10px 0' }}>
+      <label style={styles.label}>Arquivo (.xlsx) — modelo de {fornecedor.nome}</label>
+      <input type="file" accept=".xlsx" onChange={handleFile} disabled={busy} />
+
+      {parsed && (
+        <div style={{ marginTop: 14 }}>
+          <div className="bp-form-grid" style={styles.formGrid}>
+            {parsed.sheetNames.length > 1 && (
+              <Field label="Aba da planilha">
+                <select style={styles.input} value={sheetName} onChange={e => { setSheetName(e.target.value); setHeaderRow(0); }}>
+                  {parsed.sheetNames.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </Field>
+            )}
+            <Field label="Linha do cabeçalho">
+              <input type="number" min="1" style={styles.input} value={headerRow + 1} onChange={e => setHeaderRow(Math.max(0, Number(e.target.value) - 1))} />
+            </Field>
+            <Field label="Coluna do código do produto">
+              <select style={styles.input} value={colCodigo} onChange={e => setColCodigo(e.target.value)}>
+                <option value="">Selecione…</option>
+                {sheet?.columns.map(c => <option key={c} value={c}>{c} — {String(headerCells[c] ?? '').slice(0, 40) || '(vazio)'}</option>)}
+              </select>
+            </Field>
+            <Field label="Coluna do pedido mensal">
+              <select style={styles.input} value={colPedido} onChange={e => setColPedido(e.target.value)}>
+                <option value="">Selecione…</option>
+                {sheet?.columns.map(c => <option key={c} value={c}>{c} — {String(headerCells[c] ?? '').slice(0, 40) || '(vazio)'}</option>)}
+              </select>
+            </Field>
+            <Field label="Coluna da quantidade entregue">
+              <select style={styles.input} value={colEntregue} onChange={e => setColEntregue(e.target.value)}>
+                <option value="">Selecione…</option>
+                {sheet?.columns.map(c => <option key={c} value={c}>{c} — {String(headerCells[c] ?? '').slice(0, 40) || '(vazio)'}</option>)}
+              </select>
+            </Field>
+          </div>
+
+          <div style={styles.subTitle}>Prévia ({preview.length} linha{preview.length === 1 ? '' : 's'})</div>
+          {!preview.length ? (
+            <div style={styles.caption}>Ajuste a linha do cabeçalho e as colunas acima até aparecerem linhas aqui.</div>
+          ) : (
+            <>
+              <Table
+                columns={['Código', 'Reconhecido?', 'Pedido mensal', 'Entregue', 'Falta entregar']}
+                rows={preview.slice(0, 30).map(p => [
+                  <span style={styles.mono}>{p.productCode}</span>,
+                  codesKnown.has(p.productCode)
+                    ? <span style={{ ...styles.badge, background: '#4C8C6B22', color: '#4C8C6B' }}>OK</span>
+                    : <span style={{ ...styles.badge, background: '#C1462E22', color: '#C1462E' }}>não cadastrado</span>,
+                  fmt(p.pedidoMensal, 0), fmt(p.entregue, 0), fmt(p.pedidoMensal - p.entregue, 0),
+                ])}
+              />
+              {preview.length > 30 && <div style={styles.caption}>Mostrando as 30 primeiras — todas as {preview.length} serão importadas.</div>}
+            </>
+          )}
+
+          <button type="button" style={{ ...styles.primaryBtn, marginTop: 12 }} disabled={busy || !preview.length} onClick={confirmar}>
+            <Save size={14} /> Confirmar importação ({preview.length})
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ComparativoPedidoWidget({ pedidos, products, fornecedores }) {
+  const [selecionados, setSelecionados] = useState([]);
+  const [busca, setBusca] = useState('');
+
+  const produtosFiltrados = busca.trim()
+    ? products.filter(p => (p.code.toLowerCase().includes(busca.toLowerCase()) || (p.name || '').toLowerCase().includes(busca.toLowerCase())) && !selecionados.includes(p.code)).slice(0, 10)
+    : [];
+
+  function addProduto(code) {
+    if (selecionados.length >= 3 || selecionados.includes(code)) return;
+    setSelecionados([...selecionados, code]);
+    setBusca('');
+  }
+  function removeProduto(code) { setSelecionados(selecionados.filter(c => c !== code)); }
+
+  const dados = selecionados.map(code => {
+    const p = products.find(x => x.code === code);
+    const pedido = pedidos.find(pd => pd.product_code === code);
+    const pedidoMensal = Number(pedido?.pedido_mensal || 0);
+    const entregue = Number(pedido?.entregue || 0);
+    const fornecedorNome = fornecedores.find(f => f.id === pedido?.supplier_id)?.nome;
+    return { code, name: p?.name, fornecedorNome, pedidoMensal, entregue, falta: pedidoMensal - entregue };
+  });
+  const maxValor = Math.max(1, ...dados.flatMap(d => [d.pedidoMensal, Math.max(d.falta, 0)]));
+
+  return (
+    <div style={styles.card}>
+      <div style={styles.cardTitle}>Pedido Mensal x Falta Entregar</div>
+      <div style={styles.caption}>Selecione até 3 produtos pra comparar (código ou nome).</div>
+
+      {selecionados.length < 3 && (
+        <div style={{ position: 'relative', marginTop: 10, maxWidth: 420 }}>
+          <input style={styles.input} value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar produto…" />
+          {busca && produtosFiltrados.length > 0 && (
+            <div style={{ position: 'absolute', zIndex: 5, background: '#fff', border: '1px solid #D5D8D9', borderRadius: 6, width: '100%', maxHeight: 220, overflowY: 'auto', boxShadow: '0 8px 20px rgba(0,0,0,0.12)' }}>
+              {produtosFiltrados.map(p => (
+                <div key={p.code} style={{ padding: '7px 10px', cursor: 'pointer', fontSize: 12.5, borderBottom: '1px solid #F0F1F1' }} onMouseDown={() => addProduto(p.code)}>
+                  <span style={styles.mono}>{p.code}</span> — {p.name}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {!dados.length ? <div style={styles.emptyState}>Nenhum produto selecionado ainda.</div> : (
+        <div style={{ marginTop: 18, display: 'grid', gap: 22 }}>
+          {dados.map(d => (
+            <div key={d.code}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <div><span style={styles.mono}>{d.code}</span> — <b>{d.name || '—'}</b>{d.fornecedorNome ? ` · ${d.fornecedorNome}` : ''}</div>
+                <button style={styles.iconBtnDanger} onClick={() => removeProduto(d.code)}><Trash2 size={13} /></button>
+              </div>
+              {!d.pedidoMensal && !d.entregue ? (
+                <div style={styles.caption}>Sem pedido lançado nesse mês.</div>
+              ) : (
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <BarRow label="Pedido mensal" value={d.pedidoMensal} max={maxValor} color="#3E6E91" />
+                  <BarRow label="Falta entregar" value={Math.max(d.falta, 0)} max={maxValor} color={d.falta > 0 ? '#E8A324' : '#4C8C6B'} />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BarRow({ label, value, max, color }) {
+  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 2 }}>
+        <span>{label}</span><span style={{ fontWeight: 600 }}>{fmt(value, 0)}</span>
+      </div>
+      <div style={{ background: '#EDEFEF', borderRadius: 4, height: 10, overflow: 'hidden' }}>
+        <div style={{ width: `${pct}%`, background: color, height: '100%', borderRadius: 4 }} />
+      </div>
     </div>
   );
 }

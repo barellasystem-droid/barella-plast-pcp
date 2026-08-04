@@ -20,7 +20,9 @@ if (process.env.ALLOWED_ORIGIN) {
   app.use(cors({ origin: process.env.ALLOWED_ORIGIN.split(',').map(o => o.trim()) }));
 }
 
-app.use(express.json());
+// Limite maior que o padrão (100kb): upload de planilha de Pedido Mensal
+// (base64) facilmente passa disso mesmo em arquivos pequenos.
+app.use(express.json({ limit: '15mb' }));
 
 // Limita tentativas de login por IP para dificultar ataques de força bruta.
 const loginLimiter = rateLimit({
@@ -59,6 +61,7 @@ app.use('/api/apontamentos', require('./routes/apontamentos'));
 app.use('/api/stock', require('./routes/stock'));
 app.use('/api/fornecedores', require('./routes/fornecedores'));
 app.use('/api/expedicao', require('./routes/expedicao'));
+app.use('/api/pedidos-mensais', require('./routes/pedidosMensais'));
 
 // Error handler final: qualquer erro não tratado (inclusive vindo de rotas
 // async, graças ao express-async-errors) cai aqui em vez de virar uma
