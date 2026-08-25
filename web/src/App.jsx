@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Factory, LogOut, Lock, Unlock, Plus, Trash2, Save, X, Menu, AlertTriangle,
   Eye, EyeOff, KeyRound, Printer, Pencil, CheckCircle2, RotateCcw,
@@ -432,6 +432,7 @@ function TabRouter(props) {
     case 'estoque': return <EstoqueTab {...props} />;
     case 'expedicao': return <ExpedicaoTab {...props} />;
     case 'pedidoMensal': return <PedidoMensalTab {...props} />;
+    case 'requisicoes': return <RequisicoesTab {...props} />;
     case 'comparativoMensal': return <ComparativoMensalTab {...props} />;
     case 'perdasOperadores': return <PerdasOperadoresTab {...props} />;
     case 'usuarios': return <UsuariosTab {...props} />;
@@ -1788,6 +1789,7 @@ const STOCK_MOVEMENT_LABELS = {
   consumo_processo: 'Consumo em Processo',
   entrada_pa: 'Entrada Produto Acabado',
   saida_pa: 'Saída Produto Acabado (Romaneio)',
+  saida_requisicao: 'Saída Matéria-Prima (Requisição)',
 };
 
 function EstoqueHistorico({ onError }) {
@@ -2409,6 +2411,300 @@ function BarRow({ label, value, max, color }) {
       <div style={{ background: '#EDEFEF', borderRadius: 4, height: 10, overflow: 'hidden' }}>
         <div style={{ width: `${pct}%`, background: color, height: '100%', borderRadius: 4 }} />
       </div>
+    </div>
+  );
+}
+
+/* ============================== ASSINATURA (CANVAS) ============================== */
+
+// Assinatura desenhada com o dedo/mouse num canvas — funciona em touch
+// (celular) e mouse (desktop) via Pointer Events, que unificam os dois.
+// touchAction:'none' no canvas evita a página rolar enquanto assina no celular.
+function SignaturePad({ value, onChange, disabled }) {
+  const canvasRef = useRef(null);
+  const drawingRef = useRef(false);
+  const lastPointRef = useRef(null);
+  const hasInkRef = useRef(false);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#1B1D1F';
+    if (value) {
+      const img = new Image();
+      img.onload = () => { ctx.drawImage(img, 0, 0, rect.width, rect.height); hasInkRef.current = true; };
+      img.src = value;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function getPos(e) {
+    const rect = canvasRef.current.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
+
+  function handleDown(e) {
+    if (disabled) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    drawingRef.current = true;
+    lastPointRef.current = getPos(e);
+  }
+  function handleMove(e) {
+    if (!drawingRef.current || disabled) return;
+    const ctx = canvasRef.current.getContext('2d');
+    const pos = getPos(e);
+    ctx.beginPath();
+    ctx.moveTo(lastPointRef.current.x, lastPointRef.current.y);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+    lastPointRef.current = pos;
+    hasInkRef.current = true;
+  }
+  function handleUp() {
+    if (!drawingRef.current) return;
+    drawingRef.current = false;
+    if (hasInkRef.current) onChange(canvasRef.current.toDataURL('image/png'));
+  }
+  function clear() {
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    canvas.getContext('2d').clearRect(0, 0, rect.width, rect.height);
+    hasInkRef.current = false;
+    onChange('');
+  }
+
+  return (
+    <div>
+      <canvas
+        ref={canvasRef}
+        style={{ width: '100%', height: 150, border: '1px solid #D5D8D9', borderRadius: 6, background: '#FBFBFA', touchAction: 'none', cursor: disabled ? 'default' : 'crosshair' }}
+        onPointerDown={handleDown}
+        onPointerMove={handleMove}
+        onPointerUp={handleUp}
+        onPointerLeave={handleUp}
+      />
+      {!disabled && <button type="button" style={{ ...styles.secondaryBtn, marginTop: 6 }} onClick={clear}><X size={14} /> Limpar assinatura</button>}
+    </div>
+  );
+}
+
+/* ============================== REQUISIÇÃO DE MATERIAL ============================== */
+
+function emptyRequisicaoForm() {
+  return { solicitante: '', setor: '', productCode: '', date: new Date().toISOString().slice(0, 10), assinatura: '' };
+}
+
+function RequisicoesTab({ products, rawMaterials, canEdit, onError }) {
+  const [mode, setMode] = useState('historico'); // 'novo' | 'historico'
+  const [requisicoes, setRequisicoes] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const [editingId, setEditingId] = useState(null);
+  const [editingStatus, setEditingStatus] = useState(null);
+  const [form, setForm] = useState(emptyRequisicaoForm());
+  const [itens, setItens] = useState([]); // { rawMaterialCode, quantidade, descricao }
+  const [insumoSelecionado, setInsumoSelecionado] = useState('');
+  const [qtdInput, setQtdInput] = useState('');
+
+  async function reloadRequisicoes() {
+    try { setRequisicoes(await api.requisicoes.list()); } catch (e) { onError(e.message); }
+  }
+  useEffect(() => { reloadRequisicoes().then(() => setLoaded(true)); /* eslint-disable-next-line */ }, []);
+
+  function resetForm() {
+    setForm(emptyRequisicaoForm());
+    setItens([]);
+    setEditingId(null);
+    setEditingStatus(null);
+    setInsumoSelecionado(''); setQtdInput('');
+  }
+
+  function startNovo() { resetForm(); setMode('novo'); }
+
+  async function startEdit(r) {
+    try {
+      const full = await api.requisicoes.get(r.id);
+      setForm({
+        solicitante: full.solicitante || '', setor: full.setor || '',
+        productCode: full.product_code || '', date: full.date || '', assinatura: full.assinatura || '',
+      });
+      setItens(full.itens.map(i => ({ rawMaterialCode: i.raw_material_code, quantidade: i.quantidade, descricao: i.raw_material_descricao })));
+      setEditingId(full.id);
+      setEditingStatus(full.status);
+      setInsumoSelecionado(''); setQtdInput('');
+      setMode('novo');
+    } catch (e) { onError(e.message); }
+  }
+
+  const readOnly = !canEdit || editingStatus === 'finalizado';
+
+  function addItem() {
+    if (!insumoSelecionado || !qtdInput || Number(qtdInput) <= 0) return;
+    const rm = rawMaterials.find(x => x.code === insumoSelecionado);
+    setItens(prev => {
+      const existing = prev.find(i => i.rawMaterialCode === insumoSelecionado);
+      if (existing) return prev.map(i => i.rawMaterialCode === insumoSelecionado ? { ...i, quantidade: Number(i.quantidade) + Number(qtdInput) } : i);
+      return [...prev, { rawMaterialCode: insumoSelecionado, quantidade: Number(qtdInput), descricao: rm?.descricao }];
+    });
+    setInsumoSelecionado(''); setQtdInput('');
+  }
+  function removeItem(code) { setItens(prev => prev.filter(i => i.rawMaterialCode !== code)); }
+
+  async function salvar() {
+    if (!form.solicitante.trim()) { onError('Informe o nome de quem está solicitando.'); return; }
+    if (!itens.length) { onError('Adicione ao menos um insumo à requisição.'); return; }
+    setBusy(true);
+    try {
+      const payload = { ...form, itens: itens.map(i => ({ rawMaterialCode: i.rawMaterialCode, quantidade: i.quantidade })) };
+      if (editingId) await api.requisicoes.update(editingId, payload);
+      else await api.requisicoes.create(payload);
+      await reloadRequisicoes();
+      resetForm();
+      setMode('historico');
+    } catch (e) { onError(e.message); }
+    setBusy(false);
+  }
+
+  async function finalizar(id) {
+    setBusy(true);
+    try {
+      await api.requisicoes.finalizar(id);
+      await reloadRequisicoes();
+      if (editingId === id) setEditingStatus('finalizado');
+    } catch (e) { onError(e.message); }
+    setBusy(false);
+  }
+  async function reabrir(id) {
+    setBusy(true);
+    try {
+      await api.requisicoes.reabrir(id);
+      await reloadRequisicoes();
+      if (editingId === id) setEditingStatus('aberto');
+    } catch (e) { onError(e.message); }
+    setBusy(false);
+  }
+  async function remove(id) {
+    setBusy(true);
+    try { await api.requisicoes.remove(id); await reloadRequisicoes(); if (editingId === id) { resetForm(); setMode('historico'); } }
+    catch (e) { onError(e.message); }
+    setBusy(false);
+  }
+
+  return (
+    <div>
+      <div style={styles.card}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {canEdit && <button type="button" style={mode === 'novo' ? styles.primaryBtn : styles.secondaryBtn} onClick={startNovo}>Nova requisição</button>}
+          <button type="button" style={mode === 'historico' ? styles.primaryBtn : styles.secondaryBtn} onClick={() => setMode('historico')}>Histórico</button>
+        </div>
+      </div>
+
+      {mode === 'novo' && (
+        <div style={styles.card}>
+          <div style={styles.cardTitle}>
+            {editingId ? `Requisição ${editingId}` : 'Nova requisição de material'}
+            {editingStatus === 'finalizado' && <span style={{ ...styles.badge, marginLeft: 8, background: '#4C8C6B22', color: '#4C8C6B' }}>Finalizada</span>}
+          </div>
+          {editingStatus === 'finalizado' && (
+            <div style={{ ...styles.caption, marginBottom: 10 }}>Essa requisição já foi finalizada. Reabra pra poder alterar.</div>
+          )}
+
+          <div className="bp-form-grid" style={styles.formGrid}>
+            <Field label="Solicitante"><input style={styles.input} value={form.solicitante} disabled={readOnly} onChange={e => setForm({ ...form, solicitante: e.target.value })} /></Field>
+            <Field label="Setor"><input style={styles.input} value={form.setor} disabled={readOnly} onChange={e => setForm({ ...form, setor: e.target.value })} /></Field>
+            <Field label="Produto acabado (destino do material)">
+              <select style={styles.input} value={form.productCode} disabled={readOnly} onChange={e => setForm({ ...form, productCode: e.target.value })}>
+                <option value="">Selecione…</option>
+                {products.map(p => <option key={p.code} value={p.code}>{p.code} — {p.name}</option>)}
+              </select>
+            </Field>
+            <Field label="Data"><input type="date" style={styles.input} value={form.date} disabled={readOnly} onChange={e => setForm({ ...form, date: e.target.value })} /></Field>
+          </div>
+
+          {!readOnly && (
+            <>
+              <div style={styles.subTitle}>Adicionar insumo</div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <div style={{ flex: '2 1 260px' }}>
+                  <label style={styles.label}>Insumo</label>
+                  <select style={styles.input} value={insumoSelecionado} onChange={e => setInsumoSelecionado(e.target.value)}>
+                    <option value="">Selecione…</option>
+                    {rawMaterials.map(r => <option key={r.code} value={r.code}>{r.code} — {r.descricao}</option>)}
+                  </select>
+                </div>
+                <div style={{ flex: '0 1 130px' }}>
+                  <label style={styles.label}>Quantidade (kg)</label>
+                  <input type="number" step="0.01" style={styles.input} value={qtdInput} onChange={e => setQtdInput(e.target.value)} />
+                </div>
+                <button type="button" style={styles.secondaryBtn} disabled={!insumoSelecionado || !qtdInput} onClick={addItem}><Plus size={14} /> Adicionar</button>
+              </div>
+            </>
+          )}
+
+          <Table
+            columns={['Código', 'Insumo', 'Quantidade (kg)', !readOnly ? 'Ações' : null].filter(Boolean)}
+            rows={itens.map(i => [
+              <span style={styles.mono}>{i.rawMaterialCode}</span>,
+              i.descricao || rawMaterials.find(r => r.code === i.rawMaterialCode)?.descricao || '—',
+              fmt(i.quantidade, 3),
+              !readOnly ? <button style={styles.iconBtnDanger} onClick={() => removeItem(i.rawMaterialCode)}><Trash2 size={13} /></button> : null,
+            ].filter(v => v !== null))}
+          />
+
+          <div style={styles.subTitle}>Assinatura de quem está coletando</div>
+          <SignaturePad key={editingId || 'novo'} value={form.assinatura} disabled={readOnly} onChange={v => setForm(f => ({ ...f, assinatura: v }))} />
+
+          <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+            {!readOnly && <button type="button" style={styles.primaryBtn} disabled={busy} onClick={salvar}><Save size={14} /> {editingId ? 'Salvar alterações' : 'Salvar requisição'}</button>}
+            {canEdit && editingId && editingStatus !== 'finalizado' && (
+              <button type="button" style={{ ...styles.secondaryBtn, color: '#4C8C6B', borderColor: '#4C8C6B' }} disabled={busy} onClick={() => finalizar(editingId)}><CheckCircle2 size={14} /> Finalizar requisição</button>
+            )}
+            {canEdit && editingId && editingStatus === 'finalizado' && (
+              <button type="button" style={styles.secondaryBtn} disabled={busy} onClick={() => reabrir(editingId)}><RotateCcw size={14} /> Reabrir requisição</button>
+            )}
+            {editingId && <button type="button" style={styles.secondaryBtn} disabled={busy} onClick={() => { resetForm(); setMode('historico'); }}><X size={14} /> {canEdit ? 'Cancelar edição' : 'Voltar'}</button>}
+          </div>
+        </div>
+      )}
+
+      {mode === 'historico' && (
+        <div style={styles.card}>
+          <div style={styles.cardTitle}>Requisições ({requisicoes.length})</div>
+          {!loaded ? <div style={styles.emptyState}>Carregando…</div> : (
+            <Table
+              columns={['Requisição', 'Solicitante', 'Setor', 'Produto', 'Data', 'Itens', 'Status', 'Ações']}
+              rows={requisicoes.map(r => [
+                <span style={styles.mono}>{r.id}</span>,
+                r.solicitante,
+                r.setor || '—',
+                r.product_name || '—',
+                r.date ? new Date(r.date + 'T00:00:00').toLocaleDateString('pt-BR') : '—',
+                r.total_itens,
+                <span style={{ ...styles.badge, background: (r.status === 'finalizado' ? '#4C8C6B' : '#E8A324') + '22', color: r.status === 'finalizado' ? '#4C8C6B' : '#B8791A' }}>
+                  {r.status === 'finalizado' ? 'Finalizada' : 'Aberta'}
+                </span>,
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <button style={styles.iconBtn} onClick={() => startEdit(r)}>{canEdit && r.status === 'aberto' ? <Pencil size={13} /> : <Eye size={13} />}</button>
+                  {canEdit && (r.status === 'aberto'
+                    ? <button style={{ ...styles.secondaryBtn, padding: '4px 8px', fontSize: 12 }} disabled={busy} onClick={() => finalizar(r.id)}>Finalizar</button>
+                    : <button style={{ ...styles.secondaryBtn, padding: '4px 8px', fontSize: 12 }} disabled={busy} onClick={() => reabrir(r.id)}>Reabrir</button>)}
+                  {canEdit && r.status === 'aberto' && <button style={styles.iconBtnDanger} disabled={busy} onClick={() => remove(r.id)}><Trash2 size={13} /></button>}
+                </div>,
+              ])}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Package, Beaker, ClipboardList, Factory, ClipboardCheck,
   Printer, Boxes, BarChart3, Users2, ShieldCheck, HardHat, Cog, Warehouse,
-  Building2, Truck, FileSpreadsheet,
+  Building2, Truck, FileSpreadsheet, PackageMinus,
 } from 'lucide-react';
 
 export const ROLES = ['admin', 'pcp', 'operador', 'almoxarifado', 'qualidade', 'gerencia', 'pendente'];
@@ -47,6 +47,7 @@ export const TABS = [
   { id: 'estoque', label: 'Estoque', group: 'Almoxarifado', icon: Warehouse },
   { id: 'expedicao', label: 'Expedição', group: 'Almoxarifado', icon: Truck },
   { id: 'pedidoMensal', label: 'Pedido Mensal', group: 'Almoxarifado', icon: FileSpreadsheet },
+  { id: 'requisicoes', label: 'Requisição de Material', group: 'Almoxarifado', icon: PackageMinus },
   { id: 'comparativoMensal', label: 'Comparativo Mensal', group: 'Relatórios', icon: BarChart3 },
   { id: 'perdasOperadores', label: 'Produção x Perdas', group: 'Relatórios', icon: BarChart3 },
   { id: 'usuarios', label: 'Usuários', group: 'Administração', icon: Users2 },

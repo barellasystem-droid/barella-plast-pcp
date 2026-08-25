@@ -216,6 +216,34 @@ async function init() {
     );
     CREATE INDEX IF NOT EXISTS idx_pedidos_mensais_periodo ON pedidos_mensais(supplier_id, ano, mes);
     CREATE INDEX IF NOT EXISTS idx_pedidos_mensais_product ON pedidos_mensais(product_code);
+
+    -- Requisição de Material: pede a saída de matéria-prima do estoque pra
+    -- uso interno (produção de um produto acabado). Mesmo padrão de status
+    -- aberto/finalizado do Romaneio: só debita o estoque ao finalizar, e
+    -- reabrir devolve — dá tempo de corrigir antes de comprometer o estoque.
+    CREATE TABLE IF NOT EXISTS requisicoes_material (
+      id TEXT PRIMARY KEY,
+      solicitante TEXT NOT NULL,
+      setor TEXT,
+      product_code TEXT,
+      date TEXT,
+      assinatura TEXT,
+      status TEXT NOT NULL DEFAULT 'aberto',
+      finalizado_em TIMESTAMPTZ,
+      finalizado_por TEXT,
+      created_by TEXT,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE SEQUENCE IF NOT EXISTS requisicoes_material_seq;
+
+    CREATE TABLE IF NOT EXISTS requisicao_itens (
+      id TEXT PRIMARY KEY,
+      requisicao_id TEXT NOT NULL REFERENCES requisicoes_material(id) ON DELETE CASCADE,
+      raw_material_code TEXT NOT NULL,
+      quantidade REAL NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_requisicao_itens_requisicao ON requisicao_itens(requisicao_id);
   `);
 }
 

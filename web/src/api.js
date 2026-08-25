@@ -114,4 +114,13 @@ export const api = {
     parse: (xlsxBase64) => request('POST', '/pedidos-mensais/parse', { xlsxBase64 }),
     confirmar: (data) => request('POST', '/pedidos-mensais/confirmar', data),
   },
+  requisicoes: {
+    list: () => request('GET', '/requisicoes'),
+    get: (id) => request('GET', `/requisicoes/${id}`),
+    create: (r) => request('POST', '/requisicoes', r),
+    update: (id, r) => request('PUT', `/requisicoes/${id}`, r),
+    finalizar: (id) => request('PATCH', `/requisicoes/${id}/finalizar`),
+    reabrir: (id) => request('PATCH', `/requisicoes/${id}/reabrir`),
+    remove: (id) => request('DELETE', `/requisicoes/${id}`),
+  },
 };

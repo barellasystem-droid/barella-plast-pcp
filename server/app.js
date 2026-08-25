@@ -62,6 +62,7 @@ app.use('/api/stock', require('./routes/stock'));
 app.use('/api/fornecedores', require('./routes/fornecedores'));
 app.use('/api/expedicao', require('./routes/expedicao'));
 app.use('/api/pedidos-mensais', require('./routes/pedidosMensais'));
+app.use('/api/requisicoes', require('./routes/requisicoes'));
 
 // Error handler final: qualquer erro não tratado (inclusive vindo de rotas
 // async, graças ao express-async-errors) cai aqui em vez de virar uma
