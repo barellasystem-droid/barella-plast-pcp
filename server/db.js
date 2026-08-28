@@ -244,6 +244,12 @@ async function init() {
       created_at TIMESTAMPTZ DEFAULT now()
     );
     CREATE INDEX IF NOT EXISTS idx_requisicao_itens_requisicao ON requisicao_itens(requisicao_id);
+
+    -- Distingue insumo (parafuso, saco plástico, etiqueta etc., usado na
+    -- Requisição de Material) de matéria-prima (resina/pigmento usado na
+    -- composição de peso dos produtos). Registros já existentes são todos
+    -- matéria-prima — é o que já eram antes desse campo existir.
+    ALTER TABLE raw_materials ADD COLUMN IF NOT EXISTS categoria TEXT DEFAULT 'materia_prima';
   `);
 }
 

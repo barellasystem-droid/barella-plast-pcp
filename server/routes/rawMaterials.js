@@ -21,9 +21,9 @@ router.post('/', requireAuth, requireEdit(TAB), async (req, res) => {
   if (existing[0]) return res.status(409).json({ error: 'Já existe uma matéria-prima com esse código.' });
 
   await db.query(
-    `INSERT INTO raw_materials (code, descricao, fornecedor, tipo, unidade, estoque)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
-    [r.code, r.descricao, r.fornecedor || '', r.tipo || 'Virgem', r.unidade || 'kg', Number(r.estoque) || 0]
+    `INSERT INTO raw_materials (code, descricao, fornecedor, tipo, unidade, estoque, categoria)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [r.code, r.descricao, r.fornecedor || '', r.tipo || 'Virgem', r.unidade || 'kg', Number(r.estoque) || 0, r.categoria || 'materia_prima']
   );
   res.status(201).json(r);
 });
@@ -42,8 +42,8 @@ router.put('/:code', requireAuth, requireEdit(TAB), async (req, res) => {
 
   await db.withTransaction(async (client) => {
     await client.query(
-      `UPDATE raw_materials SET descricao=$1, fornecedor=$2, tipo=$3, unidade=$4, estoque=$5 WHERE code=$6`,
-      [r.descricao, r.fornecedor || '', r.tipo || 'Virgem', r.unidade || 'kg', after, req.params.code]
+      `UPDATE raw_materials SET descricao=$1, fornecedor=$2, tipo=$3, unidade=$4, estoque=$5, categoria=$6 WHERE code=$7`,
+      [r.descricao, r.fornecedor || '', r.tipo || 'Virgem', r.unidade || 'kg', after, r.categoria || 'materia_prima', req.params.code]
     );
     if (delta !== 0) {
       await client.query(

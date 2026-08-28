@@ -760,7 +760,7 @@ function CadastrosTab({ products, setProducts, rawMaterials, productMaterials, r
                   <label style={styles.label}>Matéria-prima</label>
                   <select style={styles.input} value={m.rawMaterialCode} onChange={e => updateMaterial(idx, 'rawMaterialCode', e.target.value)}>
                     <option value="">Selecione…</option>
-                    {rawMaterials.map(r => <option key={r.code} value={r.code}>{r.code} — {r.descricao}</option>)}
+                    {rawMaterials.filter(r => (r.categoria || 'materia_prima') === 'materia_prima').map(r => <option key={r.code} value={r.code}>{r.code} — {r.descricao}</option>)}
                   </select>
                 </div>
                 <div style={{ flex: '0 1 110px' }}>
@@ -818,12 +818,15 @@ function Field({ label, children, wide }) {
 /* ============================== MATÉRIAS-PRIMAS ============================== */
 
 function MateriasPrimasTab({ rawMaterials, setRawMaterials, canEdit, onError }) {
-  function emptyForm() { return { code: '', descricao: '', fornecedor: '', tipo: 'Virgem', unidade: 'kg', estoque: '' }; }
+  function emptyForm() { return { code: '', descricao: '', fornecedor: '', categoria: 'materia_prima', tipo: 'Virgem', unidade: 'kg', estoque: '' }; }
   const [form, setForm] = useState(emptyForm());
   const [editingCode, setEditingCode] = useState(null);
 
   function startEdit(r) {
-    setForm({ code: r.code, descricao: r.descricao || '', fornecedor: r.fornecedor || '', tipo: r.tipo || 'Virgem', unidade: r.unidade || 'kg', estoque: r.estoque ?? '' });
+    setForm({
+      code: r.code, descricao: r.descricao || '', fornecedor: r.fornecedor || '',
+      categoria: r.categoria || 'materia_prima', tipo: r.tipo || 'Virgem', unidade: r.unidade || 'kg', estoque: r.estoque ?? '',
+    });
     setEditingCode(r.code);
   }
   function cancelEdit() { setForm(emptyForm()); setEditingCode(null); }
@@ -857,11 +860,25 @@ function MateriasPrimasTab({ rawMaterials, setRawMaterials, canEdit, onError }) 
         <div style={styles.card}>
           <div style={styles.cardTitle}>{editingCode ? `Editar matéria-prima: ${editingCode}` : 'Nova matéria-prima'}</div>
           <form onSubmit={submit} className="bp-form-grid" style={styles.formGrid}>
-            <Field label="Código MP"><input style={styles.input} value={form.code} disabled={!!editingCode} onChange={e => setForm({ ...form, code: e.target.value })} /></Field>
+            <Field label="Código"><input style={styles.input} value={form.code} disabled={!!editingCode} onChange={e => setForm({ ...form, code: e.target.value })} /></Field>
             <Field label="Descrição" wide><input style={styles.input} value={form.descricao} onChange={e => setForm({ ...form, descricao: e.target.value })} /></Field>
             <Field label="Fornecedor"><input style={styles.input} value={form.fornecedor} onChange={e => setForm({ ...form, fornecedor: e.target.value })} /></Field>
-            <Field label="Tipo"><select style={styles.input} value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })}><option>Virgem</option><option>Moído</option><option>Pigmento</option></select></Field>
-            <Field label="Estoque atual (kg)"><input type="number" style={styles.input} value={form.estoque} onChange={e => setForm({ ...form, estoque: e.target.value })} /></Field>
+            <Field label="Categoria">
+              <select style={styles.input} value={form.categoria} onChange={e => setForm({ ...form, categoria: e.target.value })}>
+                <option value="materia_prima">Matéria-Prima</option>
+                <option value="insumo">Insumo (parafuso, saco plástico, etiqueta…)</option>
+              </select>
+            </Field>
+            {form.categoria === 'materia_prima' && (
+              <Field label="Tipo"><select style={styles.input} value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })}><option>Virgem</option><option>Moído</option><option>Pigmento</option></select></Field>
+            )}
+            <Field label="Unidade">
+              <select style={styles.input} value={form.unidade} onChange={e => setForm({ ...form, unidade: e.target.value })}>
+                <option value="kg">kg</option>
+                <option value="un">un (unidade/peça)</option>
+              </select>
+            </Field>
+            <Field label={`Estoque atual (${form.unidade})`}><input type="number" style={styles.input} value={form.estoque} onChange={e => setForm({ ...form, estoque: e.target.value })} /></Field>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
               <button type="submit" style={styles.primaryBtn}>{editingCode ? <><Save size={14} /> Salvar</> : <><Plus size={14} /> Adicionar</>}</button>
               {editingCode && <button type="button" style={styles.secondaryBtn} onClick={cancelEdit}><X size={14} /> Cancelar</button>}
@@ -872,9 +889,14 @@ function MateriasPrimasTab({ rawMaterials, setRawMaterials, canEdit, onError }) 
       <div style={styles.card}>
         <div style={styles.cardTitle}>Matérias-primas ({rawMaterials.length})</div>
         <Table
-          columns={['Código', 'Descrição', 'Fornecedor', 'Tipo', 'Estoque (kg)', canEdit ? 'Ações' : null].filter(Boolean)}
+          columns={['Código', 'Descrição', 'Fornecedor', 'Categoria', 'Tipo', 'Estoque', canEdit ? 'Ações' : null].filter(Boolean)}
           rows={rawMaterials.map(r => [
-            <span style={styles.mono}>{r.code}</span>, r.descricao, r.fornecedor, r.tipo, fmt(r.estoque, 3),
+            <span style={styles.mono}>{r.code}</span>, r.descricao, r.fornecedor,
+            <span style={{ ...styles.badge, background: (r.categoria === 'insumo' ? '#8B5FB0' : '#3E6E91') + '22', color: r.categoria === 'insumo' ? '#8B5FB0' : '#3E6E91' }}>
+              {r.categoria === 'insumo' ? 'Insumo' : 'Matéria-Prima'}
+            </span>,
+            r.categoria === 'insumo' ? '—' : (r.tipo || '—'),
+            `${fmt(r.estoque, r.unidade === 'un' ? 0 : 3)} ${r.unidade || 'kg'}`,
             canEdit ? (
               <div style={{ display: 'flex', gap: 6 }}>
                 <button style={styles.iconBtn} onClick={() => startEdit(r)}><Pencil size={13} /></button>
@@ -2548,17 +2570,21 @@ function RequisicoesTab({ products, rawMaterials, canEdit, onError }) {
 
   const readOnly = !canEdit || editingStatus === 'finalizado';
 
+  const insumos = rawMaterials.filter(r => (r.categoria || 'materia_prima') === 'insumo');
+  const insumoAtual = rawMaterials.find(x => x.code === insumoSelecionado);
+
   function addItem() {
     if (!insumoSelecionado || !qtdInput || Number(qtdInput) <= 0) return;
     const rm = rawMaterials.find(x => x.code === insumoSelecionado);
     setItens(prev => {
       const existing = prev.find(i => i.rawMaterialCode === insumoSelecionado);
       if (existing) return prev.map(i => i.rawMaterialCode === insumoSelecionado ? { ...i, quantidade: Number(i.quantidade) + Number(qtdInput) } : i);
-      return [...prev, { rawMaterialCode: insumoSelecionado, quantidade: Number(qtdInput), descricao: rm?.descricao }];
+      return [...prev, { rawMaterialCode: insumoSelecionado, quantidade: Number(qtdInput), descricao: rm?.descricao, unidade: rm?.unidade || 'un' }];
     });
     setInsumoSelecionado(''); setQtdInput('');
   }
   function removeItem(code) { setItens(prev => prev.filter(i => i.rawMaterialCode !== code)); }
+  function itemUnidade(i) { return i.unidade || rawMaterials.find(r => r.code === i.rawMaterialCode)?.unidade || 'un'; }
 
   async function salvar() {
     if (!form.solicitante.trim()) { onError('Informe o nome de quem está solicitando.'); return; }
@@ -2602,7 +2628,7 @@ function RequisicoesTab({ products, rawMaterials, canEdit, onError }) {
 
   return (
     <div>
-      <div style={styles.card}>
+      <div className="no-print" style={styles.card}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {canEdit && <button type="button" style={mode === 'novo' ? styles.primaryBtn : styles.secondaryBtn} onClick={startNovo}>Nova requisição</button>}
           <button type="button" style={mode === 'historico' ? styles.primaryBtn : styles.secondaryBtn} onClick={() => setMode('historico')}>Histórico</button>
@@ -2611,69 +2637,118 @@ function RequisicoesTab({ products, rawMaterials, canEdit, onError }) {
 
       {mode === 'novo' && (
         <div style={styles.card}>
-          <div style={styles.cardTitle}>
-            {editingId ? `Requisição ${editingId}` : 'Nova requisição de material'}
-            {editingStatus === 'finalizado' && <span style={{ ...styles.badge, marginLeft: 8, background: '#4C8C6B22', color: '#4C8C6B' }}>Finalizada</span>}
-          </div>
-          {editingStatus === 'finalizado' && (
-            <div style={{ ...styles.caption, marginBottom: 10 }}>Essa requisição já foi finalizada. Reabra pra poder alterar.</div>
-          )}
+          <div className="no-print">
+            <div style={styles.cardTitle}>
+              {editingId ? `Requisição ${editingId}` : 'Nova requisição de material'}
+              {editingStatus === 'finalizado' && <span style={{ ...styles.badge, marginLeft: 8, background: '#4C8C6B22', color: '#4C8C6B' }}>Finalizada</span>}
+            </div>
+            {editingStatus === 'finalizado' && (
+              <div style={{ ...styles.caption, marginBottom: 10 }}>Essa requisição já foi finalizada. Reabra pra poder alterar.</div>
+            )}
 
-          <div className="bp-form-grid" style={styles.formGrid}>
-            <Field label="Solicitante"><input style={styles.input} value={form.solicitante} disabled={readOnly} onChange={e => setForm({ ...form, solicitante: e.target.value })} /></Field>
-            <Field label="Setor"><input style={styles.input} value={form.setor} disabled={readOnly} onChange={e => setForm({ ...form, setor: e.target.value })} /></Field>
-            <Field label="Produto acabado (destino do material)">
-              <select style={styles.input} value={form.productCode} disabled={readOnly} onChange={e => setForm({ ...form, productCode: e.target.value })}>
-                <option value="">Selecione…</option>
-                {products.map(p => <option key={p.code} value={p.code}>{p.code} — {p.name}</option>)}
-              </select>
-            </Field>
-            <Field label="Data"><input type="date" style={styles.input} value={form.date} disabled={readOnly} onChange={e => setForm({ ...form, date: e.target.value })} /></Field>
+            <div className="bp-form-grid" style={styles.formGrid}>
+              <Field label="Solicitante"><input style={styles.input} value={form.solicitante} disabled={readOnly} onChange={e => setForm({ ...form, solicitante: e.target.value })} /></Field>
+              <Field label="Setor"><input style={styles.input} value={form.setor} disabled={readOnly} onChange={e => setForm({ ...form, setor: e.target.value })} /></Field>
+              <Field label="Produto acabado (destino do material)">
+                <select style={styles.input} value={form.productCode} disabled={readOnly} onChange={e => setForm({ ...form, productCode: e.target.value })}>
+                  <option value="">Selecione…</option>
+                  {products.map(p => <option key={p.code} value={p.code}>{p.code} — {p.name}</option>)}
+                </select>
+              </Field>
+              <Field label="Data"><input type="date" style={styles.input} value={form.date} disabled={readOnly} onChange={e => setForm({ ...form, date: e.target.value })} /></Field>
+            </div>
+
+            {!readOnly && (
+              <>
+                <div style={styles.subTitle}>Adicionar insumo</div>
+                {!insumos.length ? (
+                  <div style={{ ...styles.caption, marginBottom: 10 }}>Nenhum insumo cadastrado ainda — cadastre em Matérias-Primas com categoria "Insumo" (parafuso, saco plástico, etiqueta…).</div>
+                ) : (
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                    <div style={{ flex: '2 1 260px' }}>
+                      <label style={styles.label}>Insumo</label>
+                      <select style={styles.input} value={insumoSelecionado} onChange={e => setInsumoSelecionado(e.target.value)}>
+                        <option value="">Selecione…</option>
+                        {insumos.map(r => <option key={r.code} value={r.code}>{r.code} — {r.descricao}</option>)}
+                      </select>
+                    </div>
+                    <div style={{ flex: '0 1 130px' }}>
+                      <label style={styles.label}>Quantidade{insumoAtual ? ` (${insumoAtual.unidade || 'un'})` : ''}</label>
+                      <input type="number" step="0.01" style={styles.input} value={qtdInput} onChange={e => setQtdInput(e.target.value)} />
+                    </div>
+                    <button type="button" style={styles.secondaryBtn} disabled={!insumoSelecionado || !qtdInput} onClick={addItem}><Plus size={14} /> Adicionar</button>
+                  </div>
+                )}
+              </>
+            )}
+
+            <Table
+              columns={['Código', 'Insumo', 'Quantidade', !readOnly ? 'Ações' : null].filter(Boolean)}
+              rows={itens.map(i => [
+                <span style={styles.mono}>{i.rawMaterialCode}</span>,
+                i.descricao || rawMaterials.find(r => r.code === i.rawMaterialCode)?.descricao || '—',
+                `${fmt(i.quantidade, itemUnidade(i) === 'un' ? 0 : 3)} ${itemUnidade(i)}`,
+                !readOnly ? <button style={styles.iconBtnDanger} onClick={() => removeItem(i.rawMaterialCode)}><Trash2 size={13} /></button> : null,
+              ].filter(v => v !== null))}
+            />
+
+            <div style={styles.subTitle}>Assinatura de quem está retirando o material</div>
+            <SignaturePad key={editingId || 'novo'} value={form.assinatura} disabled={readOnly} onChange={v => setForm(f => ({ ...f, assinatura: v }))} />
+
+            <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+              {!readOnly && <button type="button" style={styles.primaryBtn} disabled={busy} onClick={salvar}><Save size={14} /> {editingId ? 'Salvar alterações' : 'Salvar requisição'}</button>}
+              {canEdit && editingId && editingStatus !== 'finalizado' && (
+                <button type="button" style={{ ...styles.secondaryBtn, color: '#4C8C6B', borderColor: '#4C8C6B' }} disabled={busy} onClick={() => finalizar(editingId)}><CheckCircle2 size={14} /> Finalizar requisição</button>
+              )}
+              {canEdit && editingId && editingStatus === 'finalizado' && (
+                <button type="button" style={styles.secondaryBtn} disabled={busy} onClick={() => reabrir(editingId)}><RotateCcw size={14} /> Reabrir requisição</button>
+              )}
+              {editingId && <button type="button" style={styles.secondaryBtn} disabled={busy} onClick={() => window.print()}><Printer size={14} /> Imprimir requisição</button>}
+              {editingId && <button type="button" style={styles.secondaryBtn} disabled={busy} onClick={() => { resetForm(); setMode('historico'); }}><X size={14} /> {canEdit ? 'Cancelar edição' : 'Voltar'}</button>}
+            </div>
           </div>
 
-          {!readOnly && (
-            <>
-              <div style={styles.subTitle}>Adicionar insumo</div>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                <div style={{ flex: '2 1 260px' }}>
-                  <label style={styles.label}>Insumo</label>
-                  <select style={styles.input} value={insumoSelecionado} onChange={e => setInsumoSelecionado(e.target.value)}>
-                    <option value="">Selecione…</option>
-                    {rawMaterials.map(r => <option key={r.code} value={r.code}>{r.code} — {r.descricao}</option>)}
-                  </select>
+          {editingId && (
+            <div className="bp-print-only">
+              <div style={styles.printHeader}>
+                <div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16 }}>REQUISIÇÃO DE MATERIAL {editingId}</div>
+                  <div style={{ fontSize: 12, marginTop: 2 }}>Solicitante: {form.solicitante || '—'} · Setor: {form.setor || '—'}</div>
+                  <div style={{ fontSize: 12 }}>Produto acabado: {products.find(p => p.code === form.productCode)?.name || '—'}</div>
+                  <div style={{ fontSize: 12 }}>Data: {form.date ? new Date(form.date + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</div>
                 </div>
-                <div style={{ flex: '0 1 130px' }}>
-                  <label style={styles.label}>Quantidade (kg)</label>
-                  <input type="number" step="0.01" style={styles.input} value={qtdInput} onChange={e => setQtdInput(e.target.value)} />
-                </div>
-                <button type="button" style={styles.secondaryBtn} disabled={!insumoSelecionado || !qtdInput} onClick={addItem}><Plus size={14} /> Adicionar</button>
+                <div style={{ fontSize: 12, fontWeight: 600 }}>BARELLA PLAST</div>
               </div>
-            </>
+
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginTop: 14 }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: 'left', borderBottom: '2px solid #333', padding: '4px 6px' }}>Código</th>
+                    <th style={{ textAlign: 'left', borderBottom: '2px solid #333', padding: '4px 6px' }}>Insumo</th>
+                    <th style={{ textAlign: 'right', borderBottom: '2px solid #333', padding: '4px 6px' }}>Quantidade</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {itens.map(i => (
+                    <tr key={i.rawMaterialCode}>
+                      <td style={{ padding: '4px 6px', borderBottom: '1px solid #ccc' }}>{i.rawMaterialCode}</td>
+                      <td style={{ padding: '4px 6px', borderBottom: '1px solid #ccc' }}>{i.descricao || rawMaterials.find(r => r.code === i.rawMaterialCode)?.descricao || '—'}</td>
+                      <td style={{ padding: '4px 6px', borderBottom: '1px solid #ccc', textAlign: 'right' }}>{fmt(i.quantidade, itemUnidade(i) === 'un' ? 0 : 3)} {itemUnidade(i)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div style={{ marginTop: 40, pageBreakInside: 'avoid' }}>
+                <div style={{ fontSize: 12, marginBottom: 6 }}>Assinatura de quem retirou o material{form.solicitante ? ` (${form.solicitante})` : ''}:</div>
+                {form.assinatura ? (
+                  <img src={form.assinatura} alt="Assinatura" style={{ height: 90, border: '1px solid #333', borderRadius: 4, background: '#fff' }} />
+                ) : (
+                  <div style={{ borderTop: '1px solid #333', width: 300, marginTop: 40 }} />
+                )}
+              </div>
+            </div>
           )}
-
-          <Table
-            columns={['Código', 'Insumo', 'Quantidade (kg)', !readOnly ? 'Ações' : null].filter(Boolean)}
-            rows={itens.map(i => [
-              <span style={styles.mono}>{i.rawMaterialCode}</span>,
-              i.descricao || rawMaterials.find(r => r.code === i.rawMaterialCode)?.descricao || '—',
-              fmt(i.quantidade, 3),
-              !readOnly ? <button style={styles.iconBtnDanger} onClick={() => removeItem(i.rawMaterialCode)}><Trash2 size={13} /></button> : null,
-            ].filter(v => v !== null))}
-          />
-
-          <div style={styles.subTitle}>Assinatura de quem está coletando</div>
-          <SignaturePad key={editingId || 'novo'} value={form.assinatura} disabled={readOnly} onChange={v => setForm(f => ({ ...f, assinatura: v }))} />
-
-          <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-            {!readOnly && <button type="button" style={styles.primaryBtn} disabled={busy} onClick={salvar}><Save size={14} /> {editingId ? 'Salvar alterações' : 'Salvar requisição'}</button>}
-            {canEdit && editingId && editingStatus !== 'finalizado' && (
-              <button type="button" style={{ ...styles.secondaryBtn, color: '#4C8C6B', borderColor: '#4C8C6B' }} disabled={busy} onClick={() => finalizar(editingId)}><CheckCircle2 size={14} /> Finalizar requisição</button>
-            )}
-            {canEdit && editingId && editingStatus === 'finalizado' && (
-              <button type="button" style={styles.secondaryBtn} disabled={busy} onClick={() => reabrir(editingId)}><RotateCcw size={14} /> Reabrir requisição</button>
-            )}
-            {editingId && <button type="button" style={styles.secondaryBtn} disabled={busy} onClick={() => { resetForm(); setMode('historico'); }}><X size={14} /> {canEdit ? 'Cancelar edição' : 'Voltar'}</button>}
-          </div>
         </div>
       )}
 
