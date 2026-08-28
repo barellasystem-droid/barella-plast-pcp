@@ -2692,7 +2692,7 @@ function RequisicoesTab({ products, rawMaterials, canEdit, onError }) {
               ].filter(v => v !== null))}
             />
 
-            <div style={styles.subTitle}>Assinatura de quem está retirando o material</div>
+            <div style={styles.subTitle}>Retirado por:</div>
             <SignaturePad key={editingId || 'novo'} value={form.assinatura} disabled={readOnly} onChange={v => setForm(f => ({ ...f, assinatura: v }))} />
 
             <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
@@ -2740,7 +2740,7 @@ function RequisicoesTab({ products, rawMaterials, canEdit, onError }) {
               </table>
 
               <div style={{ marginTop: 40, pageBreakInside: 'avoid' }}>
-                <div style={{ fontSize: 12, marginBottom: 6 }}>Assinatura de quem retirou o material{form.solicitante ? ` (${form.solicitante})` : ''}:</div>
+                <div style={{ fontSize: 12, marginBottom: 6 }}>Retirado por:</div>
                 {form.assinatura ? (
                   <img src={form.assinatura} alt="Assinatura" style={{ height: 90, border: '1px solid #333', borderRadius: 4, background: '#fff' }} />
                 ) : (
