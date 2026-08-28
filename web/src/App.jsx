@@ -2537,6 +2537,8 @@ function RequisicoesTab({ products, rawMaterials, canEdit, onError }) {
   const [itens, setItens] = useState([]); // { rawMaterialCode, quantidade, descricao }
   const [insumoSelecionado, setInsumoSelecionado] = useState('');
   const [qtdInput, setQtdInput] = useState('');
+  const [dataInicio, setDataInicio] = useState('');
+  const [dataFim, setDataFim] = useState('');
 
   async function reloadRequisicoes() {
     try { setRequisicoes(await api.requisicoes.list()); } catch (e) { onError(e.message); }
@@ -2649,7 +2651,7 @@ function RequisicoesTab({ products, rawMaterials, canEdit, onError }) {
             <div className="bp-form-grid" style={styles.formGrid}>
               <Field label="Solicitante"><input style={styles.input} value={form.solicitante} disabled={readOnly} onChange={e => setForm({ ...form, solicitante: e.target.value })} /></Field>
               <Field label="Setor"><input style={styles.input} value={form.setor} disabled={readOnly} onChange={e => setForm({ ...form, setor: e.target.value })} /></Field>
-              <Field label="Produto acabado (destino do material)">
+              <Field label="Insumo">
                 <select style={styles.input} value={form.productCode} disabled={readOnly} onChange={e => setForm({ ...form, productCode: e.target.value })}>
                   <option value="">Selecione…</option>
                   {products.map(p => <option key={p.code} value={p.code}>{p.code} — {p.name}</option>)}
@@ -2752,13 +2754,52 @@ function RequisicoesTab({ products, rawMaterials, canEdit, onError }) {
         </div>
       )}
 
-      {mode === 'historico' && (
-        <div style={styles.card}>
-          <div style={styles.cardTitle}>Requisições ({requisicoes.length})</div>
-          {!loaded ? <div style={styles.emptyState}>Carregando…</div> : (
-            <Table
-              columns={['Requisição', 'Solicitante', 'Setor', 'Produto', 'Data', 'Itens', 'Status', 'Ações']}
-              rows={requisicoes.map(r => [
+      {mode === 'historico' && (() => {
+        const requisicoesFiltradas = requisicoes.filter(r => (!dataInicio || r.date >= dataInicio) && (!dataFim || r.date <= dataFim));
+        const compilado = {};
+        requisicoesFiltradas.filter(r => r.status === 'finalizado').forEach(r => {
+          (r.itens || []).forEach(it => {
+            const key = it.raw_material_code;
+            if (!compilado[key]) compilado[key] = { code: key, descricao: it.raw_material_descricao, unidade: it.raw_material_unidade || 'un', total: 0 };
+            compilado[key].total += Number(it.quantidade) || 0;
+          });
+        });
+        const compiladoList = Object.values(compilado).sort((a, b) => b.total - a.total);
+
+        return (
+          <div>
+            <div style={styles.card}>
+              <div style={styles.cardTitle}>Filtrar por período</div>
+              <div className="bp-grid-2" style={{ gap: 12 }}>
+                <Field label="Início"><input type="date" style={styles.input} value={dataInicio} onChange={e => setDataInicio(e.target.value)} /></Field>
+                <Field label="Fim"><input type="date" style={styles.input} value={dataFim} onChange={e => setDataFim(e.target.value)} /></Field>
+              </div>
+              {(dataInicio || dataFim) && <button type="button" style={{ ...styles.secondaryBtn, marginTop: 10 }} onClick={() => { setDataInicio(''); setDataFim(''); }}><X size={14} /> Limpar período</button>}
+            </div>
+
+            {(dataInicio || dataFim) && (
+              <div style={styles.card}>
+                <div style={styles.cardTitle}>Total de insumos retirados no período (só requisições finalizadas)</div>
+                {!compiladoList.length ? (
+                  <div style={styles.emptyState}>Nenhuma saída de insumo finalizada nesse período.</div>
+                ) : (
+                  <Table
+                    columns={['Código', 'Insumo', 'Quantidade total retirada']}
+                    rows={compiladoList.map(c => [
+                      <span style={styles.mono}>{c.code}</span>, c.descricao || '—',
+                      `${fmt(c.total, c.unidade === 'un' ? 0 : 3)} ${c.unidade}`,
+                    ])}
+                  />
+                )}
+              </div>
+            )}
+
+            <div style={styles.card}>
+              <div style={styles.cardTitle}>Requisições ({requisicoesFiltradas.length})</div>
+              {!loaded ? <div style={styles.emptyState}>Carregando…</div> : (
+                <Table
+                  columns={['Requisição', 'Solicitante', 'Setor', 'Produto', 'Data', 'Itens', 'Status', 'Ações']}
+                  rows={requisicoesFiltradas.map(r => [
                 <span style={styles.mono}>{r.id}</span>,
                 r.solicitante,
                 r.setor || '—',
@@ -2775,11 +2816,13 @@ function RequisicoesTab({ products, rawMaterials, canEdit, onError }) {
                     : <button style={{ ...styles.secondaryBtn, padding: '4px 8px', fontSize: 12 }} disabled={busy} onClick={() => reabrir(r.id)}>Reabrir</button>)}
                   {canEdit && r.status === 'aberto' && <button style={styles.iconBtnDanger} disabled={busy} onClick={() => remove(r.id)}><Trash2 size={13} /></button>}
                 </div>,
-              ])}
-            />
-          )}
-        </div>
-      )}
+                  ])}
+                />
+              )}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

@@ -10,17 +10,34 @@ function validItens(itens) {
   return (Array.isArray(itens) ? itens : []).filter(i => i && i.rawMaterialCode && Number(i.quantidade) > 0);
 }
 
+// Itens vêm embutidos em cada requisição (não só o total agregado) pra dar
+// pro frontend montar o relatório compilado por insumo num período, sem
+// precisar buscar o detalhe de cada requisição uma a uma.
 router.get('/', requireAuth, requireView(TAB), async (req, res) => {
-  const { rows } = await db.query(`
-    SELECT r.*, p.name AS product_name,
-           COALESCE(SUM(i.quantidade), 0) AS total_quantidade,
-           COUNT(i.id) AS total_itens
+  const { rows: heads } = await db.query(`
+    SELECT r.*, p.name AS product_name
     FROM requisicoes_material r
     LEFT JOIN products p ON p.code = r.product_code
-    LEFT JOIN requisicao_itens i ON i.requisicao_id = r.id
-    GROUP BY r.id, p.name
     ORDER BY r.created_at DESC
   `);
+  const { rows: itensRows } = await db.query(`
+    SELECT ri.requisicao_id, ri.raw_material_code, ri.quantidade,
+           rm.descricao AS raw_material_descricao, rm.unidade AS raw_material_unidade
+    FROM requisicao_itens ri
+    LEFT JOIN raw_materials rm ON rm.code = ri.raw_material_code
+  `);
+  const itensByReq = {};
+  for (const it of itensRows) (itensByReq[it.requisicao_id] = itensByReq[it.requisicao_id] || []).push(it);
+
+  const rows = heads.map(h => {
+    const itens = itensByReq[h.id] || [];
+    return {
+      ...h,
+      itens,
+      total_itens: itens.length,
+      total_quantidade: itens.reduce((s, i) => s + (Number(i.quantidade) || 0), 0),
+    };
+  });
   res.json(rows);
 });
 
