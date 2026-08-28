@@ -250,6 +250,12 @@ async function init() {
     -- composição de peso dos produtos). Registros já existentes são todos
     -- matéria-prima — é o que já eram antes desse campo existir.
     ALTER TABLE raw_materials ADD COLUMN IF NOT EXISTS categoria TEXT DEFAULT 'materia_prima';
+
+    -- Mesma tabela serve pra Requisição de Material (insumo) e Requisição de
+    -- Matéria-Prima (saída fora da OP, pra fabricação própria) — só muda o
+    -- tipo e a categoria dos itens aceitos. Registros já existentes eram
+    -- todos de insumo, único tipo que existia até aqui.
+    ALTER TABLE requisicoes_material ADD COLUMN IF NOT EXISTS tipo TEXT DEFAULT 'insumo';
   `);
 }
 

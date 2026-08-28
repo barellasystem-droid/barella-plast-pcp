@@ -432,7 +432,8 @@ function TabRouter(props) {
     case 'estoque': return <EstoqueTab {...props} />;
     case 'expedicao': return <ExpedicaoTab {...props} />;
     case 'pedidoMensal': return <PedidoMensalTab {...props} />;
-    case 'requisicoes': return <RequisicoesTab {...props} />;
+    case 'requisicoes': return <RequisicoesTab key="insumo" {...props} tipo="insumo" />;
+    case 'requisicoesMP': return <RequisicoesTab key="materia_prima" {...props} tipo="materia_prima" />;
     case 'comparativoMensal': return <ComparativoMensalTab {...props} />;
     case 'perdasOperadores': return <PerdasOperadoresTab {...props} />;
     case 'usuarios': return <UsuariosTab {...props} />;
@@ -1811,7 +1812,8 @@ const STOCK_MOVEMENT_LABELS = {
   consumo_processo: 'Consumo em Processo',
   entrada_pa: 'Entrada Produto Acabado',
   saida_pa: 'Saída Produto Acabado (Romaneio)',
-  saida_requisicao: 'Saída Matéria-Prima (Requisição)',
+  saida_requisicao_insumo: 'Saída Insumo (Requisição)',
+  saida_requisicao_mp: 'Saída Matéria-Prima (Requisição)',
 };
 
 function EstoqueHistorico({ onError }) {
@@ -2525,7 +2527,10 @@ function emptyRequisicaoForm() {
   return { solicitante: '', setor: '', productCode: '', date: new Date().toISOString().slice(0, 10), assinatura: '' };
 }
 
-function RequisicoesTab({ products, rawMaterials, canEdit, onError }) {
+function RequisicoesTab({ products, rawMaterials, canEdit, onError, tipo = 'insumo' }) {
+  const tipoLabel = tipo === 'materia_prima' ? 'Matéria-Prima' : 'Insumo';
+  const tipoLabelLower = tipo === 'materia_prima' ? 'matéria-prima' : 'insumo';
+
   const [mode, setMode] = useState('historico'); // 'novo' | 'historico'
   const [requisicoes, setRequisicoes] = useState([]);
   const [loaded, setLoaded] = useState(false);
@@ -2541,7 +2546,7 @@ function RequisicoesTab({ products, rawMaterials, canEdit, onError }) {
   const [dataFim, setDataFim] = useState('');
 
   async function reloadRequisicoes() {
-    try { setRequisicoes(await api.requisicoes.list()); } catch (e) { onError(e.message); }
+    try { setRequisicoes(await api.requisicoes.list(tipo)); } catch (e) { onError(e.message); }
   }
   useEffect(() => { reloadRequisicoes().then(() => setLoaded(true)); /* eslint-disable-next-line */ }, []);
 
@@ -2572,7 +2577,7 @@ function RequisicoesTab({ products, rawMaterials, canEdit, onError }) {
 
   const readOnly = !canEdit || editingStatus === 'finalizado';
 
-  const insumos = rawMaterials.filter(r => (r.categoria || 'materia_prima') === 'insumo');
+  const insumos = rawMaterials.filter(r => (r.categoria || 'materia_prima') === tipo);
   const insumoAtual = rawMaterials.find(x => x.code === insumoSelecionado);
 
   function addItem() {
@@ -2590,10 +2595,10 @@ function RequisicoesTab({ products, rawMaterials, canEdit, onError }) {
 
   async function salvar() {
     if (!form.solicitante.trim()) { onError('Informe o nome de quem está solicitando.'); return; }
-    if (!itens.length) { onError('Adicione ao menos um insumo à requisição.'); return; }
+    if (!itens.length) { onError(`Adicione ao menos um(a) ${tipoLabelLower} à requisição.`); return; }
     setBusy(true);
     try {
-      const payload = { ...form, itens: itens.map(i => ({ rawMaterialCode: i.rawMaterialCode, quantidade: i.quantidade })) };
+      const payload = { ...form, tipo, itens: itens.map(i => ({ rawMaterialCode: i.rawMaterialCode, quantidade: i.quantidade })) };
       if (editingId) await api.requisicoes.update(editingId, payload);
       else await api.requisicoes.create(payload);
       await reloadRequisicoes();
@@ -2641,7 +2646,7 @@ function RequisicoesTab({ products, rawMaterials, canEdit, onError }) {
         <div style={styles.card}>
           <div className="no-print">
             <div style={styles.cardTitle}>
-              {editingId ? `Requisição ${editingId}` : 'Nova requisição de material'}
+              {editingId ? `Requisição ${editingId}` : `Nova requisição de ${tipoLabelLower}`}
               {editingStatus === 'finalizado' && <span style={{ ...styles.badge, marginLeft: 8, background: '#4C8C6B22', color: '#4C8C6B' }}>Finalizada</span>}
             </div>
             {editingStatus === 'finalizado' && (
@@ -2651,7 +2656,7 @@ function RequisicoesTab({ products, rawMaterials, canEdit, onError }) {
             <div className="bp-form-grid" style={styles.formGrid}>
               <Field label="Solicitante"><input style={styles.input} value={form.solicitante} disabled={readOnly} onChange={e => setForm({ ...form, solicitante: e.target.value })} /></Field>
               <Field label="Setor"><input style={styles.input} value={form.setor} disabled={readOnly} onChange={e => setForm({ ...form, setor: e.target.value })} /></Field>
-              <Field label="Insumo">
+              <Field label={tipo === 'insumo' ? 'Insumo' : 'Produto (destino do material)'}>
                 <select style={styles.input} value={form.productCode} disabled={readOnly} onChange={e => setForm({ ...form, productCode: e.target.value })}>
                   <option value="">Selecione…</option>
                   {products.map(p => <option key={p.code} value={p.code}>{p.code} — {p.name}</option>)}
@@ -2662,13 +2667,16 @@ function RequisicoesTab({ products, rawMaterials, canEdit, onError }) {
 
             {!readOnly && (
               <>
-                <div style={styles.subTitle}>Adicionar insumo</div>
+                <div style={styles.subTitle}>Adicionar {tipoLabelLower}</div>
                 {!insumos.length ? (
-                  <div style={{ ...styles.caption, marginBottom: 10 }}>Nenhum insumo cadastrado ainda — cadastre em Matérias-Primas com categoria "Insumo" (parafuso, saco plástico, etiqueta…).</div>
+                  <div style={{ ...styles.caption, marginBottom: 10 }}>
+                    Nenhum(a) {tipoLabelLower} cadastrado(a) ainda — cadastre em Matérias-Primas com categoria "{tipoLabel}"
+                    {tipo === 'insumo' ? ' (parafuso, saco plástico, etiqueta…).' : '.'}
+                  </div>
                 ) : (
                   <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                     <div style={{ flex: '2 1 260px' }}>
-                      <label style={styles.label}>Insumo</label>
+                      <label style={styles.label}>{tipoLabel}</label>
                       <select style={styles.input} value={insumoSelecionado} onChange={e => setInsumoSelecionado(e.target.value)}>
                         <option value="">Selecione…</option>
                         {insumos.map(r => <option key={r.code} value={r.code}>{r.code} — {r.descricao}</option>)}
@@ -2685,7 +2693,7 @@ function RequisicoesTab({ products, rawMaterials, canEdit, onError }) {
             )}
 
             <Table
-              columns={['Código', 'Insumo', 'Quantidade', !readOnly ? 'Ações' : null].filter(Boolean)}
+              columns={['Código', tipoLabel, 'Quantidade', !readOnly ? 'Ações' : null].filter(Boolean)}
               rows={itens.map(i => [
                 <span style={styles.mono}>{i.rawMaterialCode}</span>,
                 i.descricao || rawMaterials.find(r => r.code === i.rawMaterialCode)?.descricao || '—',
@@ -2714,9 +2722,9 @@ function RequisicoesTab({ products, rawMaterials, canEdit, onError }) {
             <div className="bp-print-only">
               <div style={styles.printHeader}>
                 <div>
-                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16 }}>REQUISIÇÃO DE MATERIAL {editingId}</div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16 }}>REQUISIÇÃO DE {tipoLabel.toUpperCase()} {editingId}</div>
                   <div style={{ fontSize: 12, marginTop: 2 }}>Solicitante: {form.solicitante || '—'} · Setor: {form.setor || '—'}</div>
-                  <div style={{ fontSize: 12 }}>Produto acabado: {products.find(p => p.code === form.productCode)?.name || '—'}</div>
+                  <div style={{ fontSize: 12 }}>Produto: {products.find(p => p.code === form.productCode)?.name || '—'}</div>
                   <div style={{ fontSize: 12 }}>Data: {form.date ? new Date(form.date + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</div>
                 </div>
                 <div style={{ fontSize: 12, fontWeight: 600 }}>BARELLA PLAST</div>
@@ -2726,7 +2734,7 @@ function RequisicoesTab({ products, rawMaterials, canEdit, onError }) {
                 <thead>
                   <tr>
                     <th style={{ textAlign: 'left', borderBottom: '2px solid #333', padding: '4px 6px' }}>Código</th>
-                    <th style={{ textAlign: 'left', borderBottom: '2px solid #333', padding: '4px 6px' }}>Insumo</th>
+                    <th style={{ textAlign: 'left', borderBottom: '2px solid #333', padding: '4px 6px' }}>{tipoLabel}</th>
                     <th style={{ textAlign: 'right', borderBottom: '2px solid #333', padding: '4px 6px' }}>Quantidade</th>
                   </tr>
                 </thead>
@@ -2779,12 +2787,12 @@ function RequisicoesTab({ products, rawMaterials, canEdit, onError }) {
 
             {(dataInicio || dataFim) && (
               <div style={styles.card}>
-                <div style={styles.cardTitle}>Total de insumos retirados no período (só requisições finalizadas)</div>
+                <div style={styles.cardTitle}>Total de {tipoLabelLower === 'insumo' ? 'insumos retirados' : 'matéria-prima retirada'} no período (só requisições finalizadas)</div>
                 {!compiladoList.length ? (
-                  <div style={styles.emptyState}>Nenhuma saída de insumo finalizada nesse período.</div>
+                  <div style={styles.emptyState}>Nenhuma saída de {tipoLabelLower} finalizada nesse período.</div>
                 ) : (
                   <Table
-                    columns={['Código', 'Insumo', 'Quantidade total retirada']}
+                    columns={['Código', tipoLabel, 'Quantidade total retirada']}
                     rows={compiladoList.map(c => [
                       <span style={styles.mono}>{c.code}</span>, c.descricao || '—',
                       `${fmt(c.total, c.unidade === 'un' ? 0 : 3)} ${c.unidade}`,

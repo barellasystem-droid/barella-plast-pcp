@@ -115,7 +115,7 @@ export const api = {
     confirmar: (data) => request('POST', '/pedidos-mensais/confirmar', data),
   },
   requisicoes: {
-    list: () => request('GET', '/requisicoes'),
+    list: (tipo) => request('GET', `/requisicoes${tipo ? '?tipo=' + tipo : ''}`),
     get: (id) => request('GET', `/requisicoes/${id}`),
     create: (r) => request('POST', '/requisicoes', r),
     update: (id, r) => request('PUT', `/requisicoes/${id}`, r),

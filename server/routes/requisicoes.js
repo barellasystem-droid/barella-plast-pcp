@@ -6,20 +6,48 @@ const { requireAuth, requireView, requireEdit } = require('../auth');
 const router = express.Router();
 const TAB = 'requisicoes';
 
+const TIPOS = ['insumo', 'materia_prima'];
+function movementTipo(tipo) { return tipo === 'materia_prima' ? 'saida_requisicao_mp' : 'saida_requisicao_insumo'; }
+
 function validItens(itens) {
   return (Array.isArray(itens) ? itens : []).filter(i => i && i.rawMaterialCode && Number(i.quantidade) > 0);
 }
 
+// Confere que cada item pedido é realmente da categoria esperada pro tipo da
+// requisição — evita, por exemplo, alguém colar um código de matéria-prima
+// numa Requisição de Material (insumo) direto pela API, sem passar pelo
+// combo já filtrado do frontend.
+async function checkItensCategoria(itens, tipo) {
+  const codes = itens.map(i => i.rawMaterialCode);
+  if (!codes.length) return null;
+  const { rows } = await db.query('SELECT code, categoria FROM raw_materials WHERE code = ANY($1)', [codes]);
+  const byCode = Object.fromEntries(rows.map(r => [r.code, r.categoria || 'materia_prima']));
+  const esperada = tipo === 'materia_prima' ? 'materia_prima' : 'insumo';
+  for (const code of codes) {
+    const categoria = byCode[code];
+    if (!categoria) return `Item "${code}" não encontrado no cadastro de matérias-primas/insumos.`;
+    if (categoria !== esperada) {
+      return `Item "${code}" é ${categoria === 'insumo' ? 'insumo' : 'matéria-prima'}, mas essa requisição é de ${esperada === 'insumo' ? 'insumo' : 'matéria-prima'}.`;
+    }
+  }
+  return null;
+}
+
 // Itens vêm embutidos em cada requisição (não só o total agregado) pra dar
-// pro frontend montar o relatório compilado por insumo num período, sem
-// precisar buscar o detalhe de cada requisição uma a uma.
+// pro frontend montar o relatório compilado por insumo/matéria-prima num
+// período, sem precisar buscar o detalhe de cada requisição uma a uma.
 router.get('/', requireAuth, requireView(TAB), async (req, res) => {
+  const tipo = TIPOS.includes(req.query.tipo) ? req.query.tipo : null;
+  const where = tipo ? 'WHERE r.tipo = $1' : '';
+  const params = tipo ? [tipo] : [];
+
   const { rows: heads } = await db.query(`
     SELECT r.*, p.name AS product_name
     FROM requisicoes_material r
     LEFT JOIN products p ON p.code = r.product_code
+    ${where}
     ORDER BY r.created_at DESC
-  `);
+  `, params);
   const { rows: itensRows } = await db.query(`
     SELECT ri.requisicao_id, ri.raw_material_code, ri.quantidade,
            rm.descricao AS raw_material_descricao, rm.unidade AS raw_material_unidade
@@ -49,7 +77,7 @@ router.get('/:id', requireAuth, requireView(TAB), async (req, res) => {
   if (!head[0]) return res.status(404).json({ error: 'Requisição não encontrada.' });
 
   const { rows: itens } = await db.query(
-    'SELECT ri.*, rm.descricao AS raw_material_descricao FROM requisicao_itens ri LEFT JOIN raw_materials rm ON rm.code = ri.raw_material_code WHERE ri.requisicao_id = $1 ORDER BY ri.created_at',
+    'SELECT ri.*, rm.descricao AS raw_material_descricao, rm.unidade AS raw_material_unidade FROM requisicao_itens ri LEFT JOIN raw_materials rm ON rm.code = ri.raw_material_code WHERE ri.requisicao_id = $1 ORDER BY ri.created_at',
     [req.params.id]
   );
   res.json({ ...head[0], itens });
@@ -57,18 +85,22 @@ router.get('/:id', requireAuth, requireView(TAB), async (req, res) => {
 
 router.post('/', requireAuth, requireEdit(TAB), async (req, res) => {
   const r = req.body || {};
+  const tipo = TIPOS.includes(r.tipo) ? r.tipo : 'insumo';
   if (!r.solicitante || !r.solicitante.trim()) return res.status(400).json({ error: 'Informe o nome de quem está solicitando.' });
   const itens = validItens(r.itens);
-  if (!itens.length) return res.status(400).json({ error: 'Adicione ao menos um insumo com quantidade maior que zero.' });
+  if (!itens.length) return res.status(400).json({ error: 'Adicione ao menos um item com quantidade maior que zero.' });
+
+  const categoriaErr = await checkItensCategoria(itens, tipo);
+  if (categoriaErr) return res.status(400).json({ error: categoriaErr });
 
   const { rows: [{ nextval }] } = await db.query("SELECT nextval('requisicoes_material_seq')");
   const id = 'RQ-' + String(nextval).padStart(5, '0');
 
   await db.withTransaction(async (client) => {
     await client.query(
-      `INSERT INTO requisicoes_material (id, solicitante, setor, product_code, date, assinatura, status, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, 'aberto', $7)`,
-      [id, r.solicitante.trim(), r.setor || '', r.productCode || null, r.date || '', r.assinatura || '', req.user.username]
+      `INSERT INTO requisicoes_material (id, solicitante, setor, product_code, date, assinatura, status, tipo, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, 'aberto', $7, $8)`,
+      [id, r.solicitante.trim(), r.setor || '', r.productCode || null, r.date || '', r.assinatura || '', tipo, req.user.username]
     );
     for (const it of itens) {
       await client.query(
@@ -81,16 +113,20 @@ router.post('/', requireAuth, requireEdit(TAB), async (req, res) => {
 });
 
 // Só permite editar cabeçalho/itens enquanto a requisição está aberta — se já
-// foi finalizada (e já debitou estoque), precisa reabrir primeiro.
+// foi finalizada (e já debitou estoque), precisa reabrir primeiro. O tipo
+// (insumo/matéria-prima) é fixo desde a criação — não é reeditável.
 router.put('/:id', requireAuth, requireEdit(TAB), async (req, res) => {
-  const { rows } = await db.query('SELECT status FROM requisicoes_material WHERE id = $1', [req.params.id]);
+  const { rows } = await db.query('SELECT status, tipo FROM requisicoes_material WHERE id = $1', [req.params.id]);
   if (!rows[0]) return res.status(404).json({ error: 'Requisição não encontrada.' });
   if (rows[0].status !== 'aberto') return res.status(409).json({ error: 'Reabra a requisição antes de alterar.' });
 
   const r = req.body || {};
   if (!r.solicitante || !r.solicitante.trim()) return res.status(400).json({ error: 'Informe o nome de quem está solicitando.' });
   const itens = validItens(r.itens);
-  if (!itens.length) return res.status(400).json({ error: 'Adicione ao menos um insumo com quantidade maior que zero.' });
+  if (!itens.length) return res.status(400).json({ error: 'Adicione ao menos um item com quantidade maior que zero.' });
+
+  const categoriaErr = await checkItensCategoria(itens, rows[0].tipo);
+  if (categoriaErr) return res.status(400).json({ error: categoriaErr });
 
   await db.withTransaction(async (client) => {
     await client.query(
@@ -108,10 +144,10 @@ router.put('/:id', requireAuth, requireEdit(TAB), async (req, res) => {
   res.json({ ok: true });
 });
 
-// Finalizar debita o estoque de matéria-prima item a item — aceita mesmo se
-// faltar saldo (fica negativo), porque o material pode ter saído do
-// almoxarifado físico independente do que o sistema mostra; não escondemos
-// esse descompasso arredondando pra zero (mesma regra já usada em Expedição).
+// Finalizar debita o estoque item a item — aceita mesmo se faltar saldo (fica
+// negativo), porque o material pode ter saído do almoxarifado físico
+// independente do que o sistema mostra; não escondemos esse descompasso
+// arredondando pra zero (mesma regra já usada em Expedição).
 router.patch('/:id/finalizar', requireAuth, requireEdit(TAB), async (req, res) => {
   const { rows } = await db.query('SELECT * FROM requisicoes_material WHERE id = $1', [req.params.id]);
   const rq = rows[0];
@@ -121,13 +157,14 @@ router.patch('/:id/finalizar', requireAuth, requireEdit(TAB), async (req, res) =
   const { rows: itens } = await db.query('SELECT * FROM requisicao_itens WHERE requisicao_id = $1', [req.params.id]);
   if (!itens.length) return res.status(400).json({ error: 'Requisição sem itens não pode ser finalizada.' });
 
+  const tipoMov = movementTipo(rq.tipo);
   await db.withTransaction(async (client) => {
     for (const it of itens) {
       await client.query('UPDATE raw_materials SET estoque = estoque - $1 WHERE code = $2', [it.quantidade, it.raw_material_code]);
       await client.query(
         `INSERT INTO stock_movements (id, tipo, raw_material_code, quantidade, referencia, usuario)
-         VALUES ($1, 'saida_requisicao', $2, $3, $4, $5)`,
-        [crypto.randomUUID(), it.raw_material_code, it.quantidade, req.params.id, req.user.username]
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [crypto.randomUUID(), tipoMov, it.raw_material_code, it.quantidade, req.params.id, req.user.username]
       );
     }
     await client.query(`UPDATE requisicoes_material SET status = 'finalizado', finalizado_em = now(), finalizado_por = $1 WHERE id = $2`, [req.user.username, req.params.id]);
@@ -135,8 +172,7 @@ router.patch('/:id/finalizar', requireAuth, requireEdit(TAB), async (req, res) =
   res.json({ ok: true });
 });
 
-// Reabre uma requisição finalizada: devolve pro estoque de matéria-prima
-// tudo que tinha sido debitado.
+// Reabre uma requisição finalizada: devolve pro estoque tudo que tinha sido debitado.
 router.patch('/:id/reabrir', requireAuth, requireEdit(TAB), async (req, res) => {
   const { rows } = await db.query('SELECT * FROM requisicoes_material WHERE id = $1', [req.params.id]);
   const rq = rows[0];
@@ -144,11 +180,14 @@ router.patch('/:id/reabrir', requireAuth, requireEdit(TAB), async (req, res) => 
   if (rq.status !== 'finalizado') return res.status(409).json({ error: 'Essa requisição ainda não foi finalizada.' });
 
   await db.withTransaction(async (client) => {
-    const { rows: movs } = await client.query(`SELECT * FROM stock_movements WHERE referencia = $1 AND tipo = 'saida_requisicao'`, [req.params.id]);
+    const { rows: movs } = await client.query(
+      `SELECT * FROM stock_movements WHERE referencia = $1 AND tipo IN ('saida_requisicao_insumo', 'saida_requisicao_mp')`,
+      [req.params.id]
+    );
     for (const m of movs) {
       await client.query('UPDATE raw_materials SET estoque = estoque + $1 WHERE code = $2', [m.quantidade, m.raw_material_code]);
     }
-    await client.query(`DELETE FROM stock_movements WHERE referencia = $1 AND tipo = 'saida_requisicao'`, [req.params.id]);
+    await client.query(`DELETE FROM stock_movements WHERE referencia = $1 AND tipo IN ('saida_requisicao_insumo', 'saida_requisicao_mp')`, [req.params.id]);
     await client.query(`UPDATE requisicoes_material SET status = 'aberto', finalizado_em = NULL, finalizado_por = NULL WHERE id = $1`, [req.params.id]);
   });
   res.json({ ok: true });
