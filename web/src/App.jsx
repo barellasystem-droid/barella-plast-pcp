@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Factory, LogOut, Lock, Unlock, Plus, Trash2, Save, X, Menu, AlertTriangle,
-  Eye, EyeOff, KeyRound, Printer, Pencil, CheckCircle2, RotateCcw,
+  Eye, EyeOff, KeyRound, Printer, Pencil, CheckCircle2, RotateCcw, FileDown,
 } from 'lucide-react';
 import { styles } from './styles.js';
 import { api, getToken, setToken } from './api.js';
@@ -2593,6 +2593,59 @@ function RequisicoesTab({ products, rawMaterials, canEdit, onError, tipo = 'insu
   function removeItem(code) { setItens(prev => prev.filter(i => i.rawMaterialCode !== code)); }
   function itemUnidade(i) { return i.unidade || rawMaterials.find(r => r.code === i.rawMaterialCode)?.unidade || 'un'; }
 
+  // Gera o PDF direto no dispositivo (monta o arquivo, não tira "foto" da
+  // tela) — funciona igual em celular e desktop, sem depender do diálogo de
+  // impressão do navegador, que varia muito entre Android/iOS. jsPDF só é
+  // baixado quando o botão é clicado (import dinâmico), pra não engordar o
+  // carregamento inicial do app com uma lib que a maioria nunca usa.
+  async function gerarPDF() {
+    const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const margin = 15;
+    let y = margin;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text(`REQUISIÇÃO DE ${tipoLabel.toUpperCase()} ${editingId}`, margin, y);
+    y += 9;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`Solicitante: ${form.solicitante || '—'}     Setor: ${form.setor || '—'}`, margin, y);
+    y += 5.5;
+    doc.text(`Produto: ${products.find(p => p.code === form.productCode)?.name || '—'}`, margin, y);
+    y += 5.5;
+    doc.text(`Data: ${form.date ? new Date(form.date + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}`, margin, y);
+    y += 8;
+
+    autoTable(doc, {
+      startY: y,
+      head: [['Código', tipoLabel, 'Quantidade']],
+      body: itens.map(i => [
+        i.rawMaterialCode,
+        i.descricao || rawMaterials.find(r => r.code === i.rawMaterialCode)?.descricao || '—',
+        `${fmt(i.quantidade, itemUnidade(i) === 'un' ? 0 : 3)} ${itemUnidade(i)}`,
+      ]),
+      styles: { fontSize: 9, cellPadding: 2 },
+      headStyles: { fillColor: [28, 31, 34] },
+      margin: { left: margin, right: margin },
+    });
+
+    let finalY = (doc.lastAutoTable?.finalY || y) + 16;
+    if (finalY > 260) { doc.addPage(); finalY = margin; }
+
+    doc.setFontSize(10);
+    doc.text('Retirado por:', margin, finalY);
+    finalY += 3;
+    if (form.assinatura) {
+      try { doc.addImage(form.assinatura, 'PNG', margin, finalY, 60, 24); } catch (e) { /* assinatura corrompida, ignora */ }
+    } else {
+      doc.line(margin, finalY + 20, margin + 70, finalY + 20);
+    }
+
+    doc.save(`Requisicao-${editingId}.pdf`);
+  }
+
   async function salvar() {
     if (!form.solicitante.trim()) { onError('Informe o nome de quem está solicitando.'); return; }
     if (!itens.length) { onError(`Adicione ao menos um(a) ${tipoLabelLower} à requisição.`); return; }
@@ -2714,6 +2767,7 @@ function RequisicoesTab({ products, rawMaterials, canEdit, onError, tipo = 'insu
                 <button type="button" style={styles.secondaryBtn} disabled={busy} onClick={() => reabrir(editingId)}><RotateCcw size={14} /> Reabrir requisição</button>
               )}
               {editingId && <button type="button" style={styles.secondaryBtn} disabled={busy} onClick={() => window.print()}><Printer size={14} /> Imprimir requisição</button>}
+              {editingId && itens.length > 0 && <button type="button" style={styles.secondaryBtn} disabled={busy} onClick={gerarPDF}><FileDown size={14} /> Gerar PDF</button>}
               {editingId && <button type="button" style={styles.secondaryBtn} disabled={busy} onClick={() => { resetForm(); setMode('historico'); }}><X size={14} /> {canEdit ? 'Cancelar edição' : 'Voltar'}</button>}
             </div>
           </div>
