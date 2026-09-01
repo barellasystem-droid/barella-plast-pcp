@@ -2,6 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const db = require('../db');
 const { requireAuth, requireView, requireEdit } = require('../auth');
+const { sendEmail } = require('../email');
 
 const router = express.Router();
 const TAB = 'requisicoes';
@@ -109,6 +110,34 @@ router.post('/', requireAuth, requireEdit(TAB), async (req, res) => {
       );
     }
   });
+
+  // Notifica admin/PCP por e-mail — nunca deixa uma falha de envio impedir a
+  // requisição de ser criada normalmente (a pessoa que pediu não tem culpa
+  // se o serviço de e-mail estiver fora do ar).
+  try {
+    const { rows: notifyUsers } = await db.query(
+      `SELECT email FROM users WHERE role IN ('admin', 'pcp') AND email IS NOT NULL AND id != $1`,
+      [req.user.id]
+    );
+    const tipoLabel = tipo === 'materia_prima' ? 'Matéria-Prima' : 'Material';
+    const itensHtml = itens.map(it => `<li>${it.rawMaterialCode} — ${it.quantidade}</li>`).join('');
+    await Promise.all(notifyUsers.map(u => sendEmail({
+      to: u.email,
+      subject: `Nova requisição de ${tipoLabel} — ${id}`,
+      html: `
+        <p><b>${req.user.username}</b> criou a requisição <b>${id}</b> (${tipoLabel}).</p>
+        <p><b>Solicitante:</b> ${r.solicitante.trim()}<br/>
+           <b>Setor:</b> ${r.setor || '—'}<br/>
+           <b>Data:</b> ${r.date || '—'}</p>
+        <p><b>Itens:</b></p>
+        <ul>${itensHtml}</ul>
+        <p>Acesse o sistema para ver os detalhes e finalizar quando aplicável.</p>
+      `,
+    })));
+  } catch (err) {
+    console.error('Falha ao notificar por e-mail a requisição', id, ':', err.message);
+  }
+
   res.status(201).json({ id });
 });
 
