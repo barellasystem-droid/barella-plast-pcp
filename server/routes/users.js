@@ -8,7 +8,7 @@ const { ROLES } = require('../constants');
 const router = express.Router();
 
 router.get('/', requireAuth, requireView('usuarios'), async (req, res) => {
-  const { rows } = await db.query('SELECT id, username, name, role, created_at FROM users ORDER BY created_at');
+  const { rows } = await db.query('SELECT id, username, name, role, email, created_at FROM users ORDER BY created_at');
   res.json(rows);
 });
 
@@ -36,6 +36,16 @@ router.patch('/:id/role', requireAuth, requireEdit('usuarios'), async (req, res)
   const { role } = req.body || {};
   if (!ROLES.includes(role)) return res.status(400).json({ error: 'Perfil inválido.' });
   await db.query('UPDATE users SET role = $1 WHERE id = $2', [role, req.params.id]);
+  res.json({ ok: true });
+});
+
+// E-mail de contato do usuário — usado, entre outras coisas, para notificar
+// admin/PCP por e-mail quando alguém cria uma requisição.
+router.patch('/:id/email', requireAuth, requireEdit('usuarios'), async (req, res) => {
+  const { email } = req.body || {};
+  const clean = (email || '').trim();
+  if (clean && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) return res.status(400).json({ error: 'E-mail inválido.' });
+  await db.query('UPDATE users SET email = $1 WHERE id = $2', [clean || null, req.params.id]);
   res.json({ ok: true });
 });
 

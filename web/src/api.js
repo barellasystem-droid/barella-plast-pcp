@@ -35,6 +35,7 @@ export const api = {
     list: () => request('GET', '/users'),
     create: (u) => request('POST', '/users', u),
     setRole: (id, role) => request('PATCH', `/users/${id}/role`, { role }),
+    setEmail: (id, email) => request('PATCH', `/users/${id}/email`, { email }),
     remove: (id) => request('DELETE', `/users/${id}`),
   },
   permissions: {

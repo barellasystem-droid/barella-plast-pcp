@@ -2985,6 +2985,9 @@ function UsuariosTab({ users, reloadUsers, canEdit, currentUser, onError }) {
   async function setRole(id, role) {
     try { await api.users.setRole(id, role); await reloadUsers(); } catch (e) { onError(e.message); }
   }
+  async function setEmail(id, email) {
+    try { await api.users.setEmail(id, email); await reloadUsers(); } catch (e) { onError(e.message); }
+  }
 
   return (
     <div>
@@ -3004,9 +3007,10 @@ function UsuariosTab({ users, reloadUsers, canEdit, currentUser, onError }) {
         <div style={styles.cardTitle}>Usuários cadastrados ({users.length})</div>
         {!loaded ? <div style={styles.emptyState}>Carregando…</div> : (
           <Table
-            columns={['Nome', 'Login', 'Perfil', canEdit ? 'Ações' : null].filter(Boolean)}
+            columns={['Nome', 'Login', 'E-mail', 'Perfil', canEdit ? 'Ações' : null].filter(Boolean)}
             rows={users.map(u => [
               u.name, <span style={styles.mono}>{u.username}</span>,
+              canEdit ? <EmailCell key={u.id} value={u.email} onSave={v => setEmail(u.id, v)} /> : (u.email || '—'),
               <span style={{ ...styles.badge, background: ROLE_STRIPE[u.role] + '22', color: ROLE_STRIPE[u.role] }}>{ROLE_LABELS[u.role]}</span>,
               canEdit ? (
                 u.id === currentUser.id ? <span style={styles.caption}>(você)</span> : (
@@ -3023,6 +3027,21 @@ function UsuariosTab({ users, reloadUsers, canEdit, currentUser, onError }) {
         )}
       </div>
     </div>
+  );
+}
+
+// Input de e-mail com estado local próprio, pra não disparar uma chamada de
+// API a cada tecla — só salva quando o campo perde o foco e o valor mudou.
+function EmailCell({ value, onSave }) {
+  const [v, setV] = useState(value || '');
+  return (
+    <input
+      style={{ ...styles.input, width: 190, padding: '4px 6px', fontSize: 12 }}
+      value={v}
+      placeholder="sem e-mail"
+      onChange={e => setV(e.target.value)}
+      onBlur={() => { if (v !== (value || '')) onSave(v); }}
+    />
   );
 }
 
