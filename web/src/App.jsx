@@ -2546,6 +2546,41 @@ function RequisicoesTab({ products, rawMaterials, canEdit, onError, tipo = 'insu
     doc.save(`Requisicao-${editingId}.pdf`);
   }
 
+  // Mesmo padrão do gerarPDF() de uma requisição, mas para o compilado do
+  // período (soma por código, só requisições finalizadas) — pensado pra
+  // levar ao almoxarifado/fornecedor sem precisar imprimir a tela.
+  async function gerarPDFPeriodo(compiladoList) {
+    const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const margin = 15;
+    let y = margin;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text(`TOTAL DE ${tipoLabel.toUpperCase()} RETIRADO NO PERÍODO`, margin, y);
+    y += 9;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    const inicioFmt = dataInicio ? new Date(dataInicio + 'T00:00:00').toLocaleDateString('pt-BR') : '—';
+    const fimFmt = dataFim ? new Date(dataFim + 'T00:00:00').toLocaleDateString('pt-BR') : '—';
+    doc.text(`Período: ${inicioFmt} a ${fimFmt}`, margin, y);
+    y += 5.5;
+    doc.text('Considera apenas requisições finalizadas.', margin, y);
+    y += 8;
+
+    autoTable(doc, {
+      startY: y,
+      head: [['Código', tipoLabel, 'Quantidade total retirada']],
+      body: compiladoList.map(c => [c.code, c.descricao || '—', `${fmt(c.total, c.unidade === 'un' ? 0 : 3)} ${c.unidade}`]),
+      styles: { fontSize: 9, cellPadding: 2 },
+      headStyles: { fillColor: [28, 31, 34] },
+      margin: { left: margin, right: margin },
+    });
+
+    doc.save(`Compilado-${tipoLabelLower.replace(/\s+/g, '-')}-${dataInicio || 'inicio'}_a_${dataFim || 'fim'}.pdf`);
+  }
+
   async function salvar() {
     if (!form.solicitante.trim()) { onError('Informe o nome de quem está solicitando.'); return; }
     if (!itens.length) { onError(`Adicione ao menos um(a) ${tipoLabelLower} à requisição.`); return; }
@@ -2741,7 +2776,12 @@ function RequisicoesTab({ products, rawMaterials, canEdit, onError, tipo = 'insu
 
             {(dataInicio || dataFim) && (
               <div style={styles.card}>
-                <div style={styles.cardTitle}>Total de {tipoLabelLower === 'insumo' ? 'insumos retirados' : 'matéria-prima retirada'} no período (só requisições finalizadas)</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                  <div style={styles.cardTitle}>Total de {tipoLabelLower === 'insumo' ? 'insumos retirados' : 'matéria-prima retirada'} no período (só requisições finalizadas)</div>
+                  {!!compiladoList.length && (
+                    <button type="button" style={styles.secondaryBtn} onClick={() => gerarPDFPeriodo(compiladoList)}><FileDown size={14} /> Gerar PDF</button>
+                  )}
+                </div>
                 {!compiladoList.length ? (
                   <div style={styles.emptyState}>Nenhuma saída de {tipoLabelLower} finalizada nesse período.</div>
                 ) : (
