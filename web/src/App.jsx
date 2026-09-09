@@ -427,7 +427,6 @@ function TabRouter(props) {
     case 'programacaoGeral': return <ProgramacaoGeralTab {...props} />;
     case 'distribuicaoInjetoras': return <DistribuicaoTab {...props} />;
     case 'apontamento': return <ApontamentoTab {...props} />;
-    case 'opImpressao': return <OpImpressaoTab {...props} />;
     case 'consolidadoMP': return <ConsolidadoMPTab {...props} />;
     case 'estoque': return <EstoqueTab {...props} />;
     case 'expedicao': return <ExpedicaoTab {...props} />;
@@ -448,29 +447,53 @@ function DashboardTab({ ordersMaquina, apontamentos, injetoras }) {
   const now = new Date();
   const [ano, setAno] = useState(String(now.getFullYear()));
   const [mes, setMes] = useState(String(now.getMonth() + 1));
+  const [dateStart, setDateStart] = useState('');
+  const [dateEnd, setDateEnd] = useState('');
+
+  const ordersMaquinaFiltradas = useMemo(
+    () => ordersMaquina.filter(o => (!dateStart || o.date >= dateStart) && (!dateEnd || o.date <= dateEnd)),
+    [ordersMaquina, dateStart, dateEnd]
+  );
+  const apontamentosFiltrados = useMemo(
+    () => apontamentos.filter(a => (!dateStart || a.date >= dateStart) && (!dateEnd || a.date <= dateEnd)),
+    [apontamentos, dateStart, dateEnd]
+  );
 
   const totals = useMemo(() => {
-    const programado = ordersMaquina.reduce((s, o) => s + Number(o.qtd_programada || 0), 0);
-    const produzido = apontamentos.reduce((s, a) => s + Number(a.qtd_produzida || 0), 0);
-    const refugo = apontamentos.reduce((s, a) => s + Number(a.refugo || 0), 0);
+    const programado = ordersMaquinaFiltradas.reduce((s, o) => s + Number(o.qtd_programada || 0), 0);
+    const produzido = apontamentosFiltrados.reduce((s, a) => s + Number(a.qtd_produzida || 0), 0);
+    const refugo = apontamentosFiltrados.reduce((s, a) => s + Number(a.refugo || 0), 0);
     return { programado, produzido, refugo, boas: produzido - refugo };
-  }, [ordersMaquina, apontamentos]);
+  }, [ordersMaquinaFiltradas, apontamentosFiltrados]);
 
   const byInjetora = useMemo(() => injetoras.map(i => {
-    const oms = ordersMaquina.filter(o => o.injetora === i.nome);
+    const oms = ordersMaquinaFiltradas.filter(o => o.injetora === i.nome);
     const programado = oms.reduce((s, o) => s + Number(o.qtd_programada || 0), 0);
     const omIds = new Set(oms.map(o => o.id));
-    const aps = apontamentos.filter(a => omIds.has(a.op_maquina_id));
+    const aps = apontamentosFiltrados.filter(a => omIds.has(a.op_maquina_id));
     const produzido = aps.reduce((s, a) => s + Number(a.qtd_produzida || 0), 0);
     const refugo = aps.reduce((s, a) => s + Number(a.refugo || 0), 0);
     return { inj: i.nome, programado, produzido, refugo };
-  }), [injetoras, ordersMaquina, apontamentos]);
+  }), [injetoras, ordersMaquinaFiltradas, apontamentosFiltrados]);
 
   const atingimento = totals.programado ? (totals.boas / totals.programado) * 100 : 0;
   const indiceRefugo = totals.produzido ? (totals.refugo / totals.produzido) * 100 : 0;
 
   return (
     <div>
+      <div style={styles.card}>
+        <div style={styles.cardTitle}>Filtrar por período</div>
+        <div className="bp-grid-2" style={{ gap: 12 }}>
+          <Field label="Data início"><input type="date" style={styles.input} value={dateStart} onChange={e => setDateStart(e.target.value)} /></Field>
+          <Field label="Data fim"><input type="date" style={styles.input} value={dateEnd} onChange={e => setDateEnd(e.target.value)} /></Field>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+          <div style={styles.caption}>{dateStart || dateEnd ? `Período: ${dateStart || '—'} a ${dateEnd || '—'}` : 'Todas as datas'}</div>
+          {(dateStart || dateEnd) && (
+            <button type="button" style={styles.secondaryBtn} onClick={() => { setDateStart(''); setDateEnd(''); }}>Limpar</button>
+          )}
+        </div>
+      </div>
       <div className="bp-kpi-grid" style={styles.kpiGrid}>
         <Kpi label="Peças programadas" value={fmt(totals.programado, 0)} />
         <Kpi label="Peças produzidas" value={fmt(totals.produzido, 0)} />
@@ -1476,129 +1499,6 @@ function ApontamentoTab({ ordersMaquina, ordersGeral, products, operators, apont
       </div>
     </div>
   );
-}
-
-/* ============================== OP PARA IMPRESSÃO ============================== */
-
-function OpImpressaoTab({ ordersMaquina, ordersGeral, products, productMaterials, rawMaterials, canEdit }) {
-  const [mode, setMode] = useState('maquina');
-  const rmByCode = Object.fromEntries(rawMaterials.map(r => [r.code, r]));
-
-  return (
-    <div>
-      <div style={styles.card}>
-        <div style={styles.cardTitle}>Documento a imprimir</div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button type="button" style={mode === 'geral' ? styles.primaryBtn : styles.secondaryBtn} onClick={() => setMode('geral')}>OP Geral (Almoxarifado)</button>
-          <button type="button" style={mode === 'maquina' ? styles.primaryBtn : styles.secondaryBtn} onClick={() => setMode('maquina')}>OP de Máquina (Injetora)</button>
-        </div>
-      </div>
-      {mode === 'geral'
-        ? <OpGeralImpressao ordersGeral={ordersGeral} products={products} productMaterials={productMaterials} rmByCode={rmByCode} />
-        : <OpMaquinaImpressao ordersMaquina={ordersMaquina} ordersGeral={ordersGeral} products={products} canEdit={canEdit} />}
-    </div>
-  );
-}
-
-// Documento para o líder do Almoxarifado: mostra a composição completa de
-// matéria-prima da OP Geral (todas as injetoras que vão consumi-la, somadas).
-function OpGeralImpressao({ ordersGeral, products, productMaterials, rmByCode }) {
-  const [selected, setSelected] = useState('');
-  const og = ordersGeral.find(o => o.id === selected);
-  const p = og ? products.find(x => x.code === og.product_code) : null;
-  const kgNecessario = og ? (Number(og.qtd_planejada) || 0) * (Number(p?.peso) || 0) / 1000 : 0;
-  const materiais = og ? materialBreakdown(og.product_code, kgNecessario, productMaterials) : [];
-
-  return (
-    <div>
-      <div style={styles.card}>
-        <select style={styles.input} value={selected} onChange={e => setSelected(e.target.value)}>
-          <option value="">Selecione a OP Geral…</option>
-          {ordersGeral.map(o => <option key={o.id} value={o.id}>{o.id} — {o.product_code}</option>)}
-        </select>
-      </div>
-      {og && (
-        <div style={styles.card}>
-          <div style={styles.printHeader}>
-            <div>
-              <div style={styles.cardTitle}>Ordem de Produção Geral — {og.id}</div>
-              <div style={styles.caption}>Destino: Líder do Almoxarifado · Data {og.date || '—'} · Prazo {og.prazo || '—'}</div>
-            </div>
-            <button style={styles.secondaryBtn} onClick={() => window.print()}><Printer size={14} /> Imprimir</button>
-          </div>
-          <div className="bp-grid-2" style={{ gap: 10, marginTop: 10 }}>
-            <InfoRow label="Código" value={og.product_code} />
-            <InfoRow label="Produto" value={p?.name} />
-            <InfoRow label="Qtd. planejada (peças)" value={fmt(og.qtd_planejada, 0)} />
-            <InfoRow label="Kg total necessário" value={`${fmt(kgNecessario, 3)} kg`} />
-          </div>
-          <div style={styles.subTitle}>Composição de matéria-prima a separar</div>
-          <Table
-            columns={['Matéria-prima', '%', 'Kg necessário']}
-            rows={materiais.map(m => [rmByCode[m.rawMaterialCode]?.descricao || m.rawMaterialCode, `${fmt(m.percentual, 1)}%`, `${fmt(m.kg, 3)} kg`])}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Documento para quem abastece a máquina: fluxo original, por injetora.
-function OpMaquinaImpressao({ ordersMaquina, ordersGeral, products, canEdit }) {
-  const [selected, setSelected] = useState('');
-  const [checklist, setChecklist] = useState({ molde: false, maquina: false, peca: false, material: false, cor: false, liberada: false });
-
-  const om = ordersMaquina.find(o => o.id === selected);
-  const og = om ? ordersGeral.find(o => o.id === om.op_geral_id) : null;
-  const p = og ? products.find(x => x.code === og.product_code) : null;
-
-  return (
-    <div>
-      <div style={styles.card}>
-        <select style={styles.input} value={selected} onChange={e => setSelected(e.target.value)}>
-          <option value="">Selecione a OP de máquina…</option>
-          {ordersMaquina.map(o => <option key={o.id} value={o.id}>{o.id} — {o.injetora}</option>)}
-        </select>
-      </div>
-
-      {om && (
-        <div style={styles.card}>
-          <div style={styles.printHeader}>
-            <div>
-              <div style={styles.cardTitle}>Ordem de Produção — {om.id}</div>
-              <div style={styles.caption}>Destino: abastecimento de máquina · Injetora {om.injetora} · Data {om.date || '—'}</div>
-            </div>
-            <button style={styles.secondaryBtn} onClick={() => window.print()}><Printer size={14} /> Imprimir</button>
-          </div>
-          <div className="bp-grid-2" style={{ gap: 10, marginTop: 10 }}>
-            <InfoRow label="Código" value={og?.product_code} />
-            <InfoRow label="Produto" value={p?.name} />
-            <InfoRow label="Molde" value={p?.molde} />
-            <InfoRow label="Qtd. programada" value={fmt(om.qtd_programada, 0)} />
-          </div>
-          <div style={styles.subTitle}>Operadores por turno</div>
-          <div className="bp-grid-3" style={{ gap: 10 }}>
-            <InfoRow label="1º Turno" value={om.op1 || '—'} />
-            <InfoRow label="2º Turno" value={om.op2 || '—'} />
-            <InfoRow label="3º Turno" value={om.op3 || '—'} />
-          </div>
-          <div style={styles.subTitle}>Checklist de liberação {canEdit ? '' : '(somente leitura)'}</div>
-          <div className="bp-grid-2" style={{ gap: 8 }}>
-            {Object.entries({ molde: 'Molde conferido', maquina: 'Máquina regulada', peca: 'Peça piloto aprovada', material: 'Material separado', cor: 'Cor aprovada', liberada: 'Ordem liberada' }).map(([k, label]) => (
-              <label key={k} style={styles.checkRow}>
-                <input type="checkbox" disabled={!canEdit} checked={checklist[k]} onChange={e => setChecklist({ ...checklist, [k]: e.target.checked })} />
-                {label}
-              </label>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function InfoRow({ label, value }) {
-  return <div><div style={styles.caption}>{label}</div><div style={{ fontWeight: 600 }}>{value || '—'}</div></div>;
 }
 
 /* ============================== CONSOLIDADO MP DO DIA ============================== */
