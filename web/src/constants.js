@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Package, Beaker, ClipboardList, Factory, ClipboardCheck,
-  Printer, Boxes, BarChart3, Users2, ShieldCheck, HardHat, Cog, Warehouse,
+  Boxes, BarChart3, Users2, ShieldCheck, HardHat, Cog, Warehouse,
   Building2, Truck, FileSpreadsheet, PackageMinus, PackageOpen,
 } from 'lucide-react';
 
@@ -42,7 +42,6 @@ export const TABS = [
   { id: 'programacaoGeral', label: 'Programação Geral', group: 'Produção', icon: ClipboardList },
   { id: 'distribuicaoInjetoras', label: 'Distribuição Injetoras', group: 'Produção', icon: Factory },
   { id: 'apontamento', label: 'Apontamento', group: 'Produção', icon: ClipboardCheck },
-  { id: 'opImpressao', label: 'OP para Impressão', group: 'Produção', icon: Printer },
   { id: 'consolidadoMP', label: 'Consolidado MP do Dia', group: 'Almoxarifado', icon: Boxes },
   { id: 'estoque', label: 'Estoque', group: 'Almoxarifado', icon: Warehouse },
   { id: 'expedicao', label: 'Expedição', group: 'Almoxarifado', icon: Truck },

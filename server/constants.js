@@ -12,7 +12,7 @@ const ROLE_LABELS = {
 
 const TABS = [
   'dashboard', 'cadastros', 'materiasPrimas', 'operadores', 'injetoras', 'fornecedores', 'programacaoGeral',
-  'distribuicaoInjetoras', 'apontamento', 'opImpressao', 'consolidadoMP', 'estoque', 'expedicao', 'pedidoMensal', 'requisicoes', 'requisicoesMP',
+  'distribuicaoInjetoras', 'apontamento', 'consolidadoMP', 'estoque', 'expedicao', 'pedidoMensal', 'requisicoes', 'requisicoesMP',
   'comparativoMensal', 'perdasOperadores', 'usuarios', 'permissoes',
 ];
 
@@ -27,7 +27,6 @@ const DEFAULT_PERMISSIONS = {
   programacaoGeral: { view: ['admin', 'pcp', 'gerencia'], edit: ['admin', 'pcp'] },
   distribuicaoInjetoras: { view: ['admin', 'pcp', 'gerencia', 'operador'], edit: ['admin', 'pcp'] },
   apontamento: { view: ['admin', 'pcp', 'operador', 'qualidade', 'gerencia'], edit: ['admin', 'pcp', 'operador'] },
-  opImpressao: { view: ['admin', 'pcp', 'operador', 'almoxarifado', 'qualidade', 'gerencia'], edit: ['admin', 'pcp', 'qualidade'] },
   consolidadoMP: { view: ['admin', 'pcp', 'almoxarifado', 'gerencia'], edit: ['admin', 'pcp', 'almoxarifado'] },
   estoque: { view: ['admin', 'pcp', 'almoxarifado', 'gerencia'], edit: ['admin', 'pcp', 'almoxarifado'] },
   expedicao: { view: ['admin', 'pcp', 'almoxarifado', 'gerencia'], edit: ['admin', 'pcp', 'almoxarifado'] },
